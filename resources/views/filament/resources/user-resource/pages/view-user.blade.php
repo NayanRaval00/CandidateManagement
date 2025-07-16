@@ -74,7 +74,7 @@
             <div>
                 <p class="text-sm text-gray-500">Resume</p>
                 @if ($record->resume)
-                    <a href="{{ asset('storage/' . $record->resume) }}"
+                    <a href="{{ asset('/' . $record->resume) }}"
                        target="_blank"
                        class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded hover:bg-primary-500 transition">
                         Download Resume

@@ -49,6 +49,7 @@ class UserResource extends Resource
 
                 FileUpload::make('resume')
                     ->directory('resumes')
+                    ->disk('public_root')
                     ->acceptedFileTypes(['application/pdf'])
                     ->maxSize(2048), // Max 2MB
 
@@ -157,7 +158,7 @@ class UserResource extends Resource
             'index' => Pages\ListUsers::route('/'),
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
-            'view' => Pages\ViewUser::route('/{record}/view'), 
+            'view' => Pages\ViewUser::route('/{record}/view'),
 
         ];
     }

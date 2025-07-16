@@ -40,9 +40,18 @@ class UserController extends Controller
 
         // Handle file upload
         if ($request->hasFile('resume')) {
-            $resumePath = $request->file('resume')->store('resumes', 'public');
-            $data['resume'] = $resumePath;
+            $file = $request->file('resume');
+
+            // Optional: create unique file name
+            $filename = time() . '_' . $file->getClientOriginalName();
+
+            // Move file to public/resumes
+            $file->move(public_path('resumes'), $filename);
+
+            // Store relative path in database
+            $data['resume'] = 'resumes/' . $filename;
         }
+
 
         User::create($data);
 
