@@ -4,10 +4,11 @@ use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Route::get('/', function () {
+//     return view('welcome');
+// });
 
+Route::permanentRedirect('/', '/admin');
 Route::get('clear-route', function () {
     Artisan::call('route:clear');
     Artisan::call('config:clear');
