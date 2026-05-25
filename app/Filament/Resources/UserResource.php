@@ -9,6 +9,7 @@ use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -33,32 +34,91 @@ class UserResource extends Resource
     {
         return $form
             ->schema([
-                TextInput::make('name')->required(),
-                TextInput::make('email')->email()->required(),
-                TextInput::make('position'),
-                TextInput::make('mobile'),
-                TextInput::make('city'),
-                TextInput::make('state'),
-                TextInput::make('current_company_name'),
-                TextInput::make('current_position'),
-                TextInput::make('eduction'),
-                TextInput::make('current_ctc'),
-                TextInput::make('expected_ctc'),
-                Textarea::make('reason_for_job_change'),
-                TextInput::make('notice_period'),
+                Forms\Components\Section::make('Personal & Account Information')
+                    ->schema([
+                        Forms\Components\Grid::make(3)
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('email')
+                                    ->email()
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('password')
+                                    ->password()
+                                    ->required(fn(string $context) => $context === 'create')
+                                    ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
+                                    ->dehydrated(fn($state) => filled($state))
+                                    ->label('Password')
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('mobile')
+                                    ->maxLength(20),
+                                Forms\Components\Select::make('roles')
+                                    ->relationship('roles', 'name')
+                                    ->preload()
+                                    ->required()
+                                    ->label('Role'),
+                            ]),
+                    ])->compact(),
 
-                FileUpload::make('resume')
-                    ->directory('resumes')
-                    ->disk('public_root')
-                    ->acceptedFileTypes(['application/pdf'])
-                    ->maxSize(2048), // Max 2MB
+                Forms\Components\Section::make('Work & Organization')
+                    ->schema([
+                        Forms\Components\Grid::make(3)
+                            ->schema([
+                                Forms\Components\TextInput::make('position')
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('work_location')
+                                    ->label('Office / Work Location')
+                                    ->maxLength(255),
+                                Forms\Components\DatePicker::make('joining_date')
+                                    ->label('Joining Date')
+                                    ->native(false),
+                                Forms\Components\Select::make('reporting_to_id')
+                                    ->relationship('reportingTo', 'name', modifyQueryUsing: fn (Builder $query, ?User $record) => 
+                                        $record ? $query->where('id', '!=', $record->id) : $query
+                                    )
+                                    ->label('Reporting To')
+                                    ->searchable()
+                                    ->preload(),
+                            ]),
+                    ])->compact(),
 
-                TextInput::make('password')
-                    ->password()
-                    ->required(fn(string $context) => $context === 'create')
-                    ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
-                    ->dehydrated(fn($state) => filled($state))
-                    ->label('Password'),
+                Forms\Components\Section::make('Residential Details')
+                    ->schema([
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('city')
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('state')
+                                    ->maxLength(255),
+                                Forms\Components\Textarea::make('residential_address')
+                                    ->label('Residential Address')
+                                    ->columnSpanFull()
+                                    ->rows(3),
+                            ]),
+                    ])->compact(),
+
+                Forms\Components\Section::make('Emergency Contact Details')
+                    ->schema([
+                        Forms\Components\Grid::make(3)
+                            ->schema([
+                                Forms\Components\TextInput::make('emergency_contact_name')
+                                    ->label('Emergency Contact Name')
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('emergency_contact_relation')
+                                    ->label('Emergency Contact Relation')
+                                    ->maxLength(255),
+                                Forms\Components\TextInput::make('emergency_contact_number')
+                                    ->label('Emergency Contact Number')
+                                    ->tel()
+                                    ->maxLength(20),
+                                Forms\Components\Textarea::make('emergency_contact_address')
+                                    ->label('Emergency Contact Address')
+                                    ->columnSpanFull()
+                                    ->rows(3),
+                            ]),
+                    ])->compact(),
             ]);
     }
 
@@ -68,22 +128,17 @@ class UserResource extends Resource
             ->columns([
                 TextColumn::make('name')->sortable()->searchable(),
                 TextColumn::make('email')->sortable()->searchable(),
-                TextColumn::make('position'),
-                TextColumn::make('city'),
-                TextColumn::make('state'),
-                TextColumn::make('created_at')->dateTime(),
+                TextColumn::make('position')->sortable(),
+                TextColumn::make('work_location')->label('Work Location')->sortable()->searchable(),
+                TextColumn::make('joining_date')->date()->sortable(),
+                TextColumn::make('reportingTo.name')->label('Reporting To')->sortable(),
+                TextColumn::make('created_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 // Tables\Actions\EditAction::make(),
                 // Tables\Actions\DeleteAction::make(),
             ])
             ->actions([
-
-                Tables\Actions\Action::make('view')
-                    ->label('View')
-                    ->url(fn(User $record) => static::getUrl('view', ['record' => $record]))
-                    ->openUrlInNewTab(),
-
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
@@ -102,13 +157,14 @@ class UserResource extends Resource
                                     Column::make('mobile'),
                                     Column::make('city'),
                                     Column::make('state'),
-                                    Column::make('current_company_name'),
-                                    Column::make('current_position'),
-                                    Column::make('eduction'),
-                                    Column::make('current_ctc'),
-                                    Column::make('expected_ctc'),
-                                    Column::make('reason_for_job_change'),
-                                    Column::make('notice_period'),
+                                    Column::make('residential_address'),
+                                    Column::make('emergency_contact_name'),
+                                    Column::make('emergency_contact_relation'),
+                                    Column::make('emergency_contact_number'),
+                                    Column::make('emergency_contact_address'),
+                                    Column::make('reportingTo.name')->heading('Reporting To'),
+                                    Column::make('work_location'),
+                                    Column::make('joining_date'),
                                     Column::make('created_at'),
                                 ])
                                 ->withFilename('users_export_' . now()->format('Y_m_d_His'))
@@ -131,13 +187,14 @@ class UserResource extends Resource
                                 Column::make('mobile'),
                                 Column::make('city'),
                                 Column::make('state'),
-                                Column::make('current_company_name'),
-                                Column::make('current_position'),
-                                Column::make('eduction'),
-                                Column::make('current_ctc'),
-                                Column::make('expected_ctc'),
-                                Column::make('reason_for_job_change'),
-                                Column::make('notice_period'),
+                                Column::make('residential_address'),
+                                Column::make('emergency_contact_name'),
+                                Column::make('emergency_contact_relation'),
+                                Column::make('emergency_contact_number'),
+                                Column::make('emergency_contact_address'),
+                                Column::make('reportingTo.name')->heading('Reporting To'),
+                                Column::make('work_location'),
+                                Column::make('joining_date'),
                                 Column::make('created_at'),
                             ])
                             ->withFilename('users_export_' . now()->format('Y_m_d_His'))
@@ -158,7 +215,6 @@ class UserResource extends Resource
             'index' => Pages\ListUsers::route('/'),
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
-            'view' => Pages\ViewUser::route('/{record}/view'),
 
         ];
     }

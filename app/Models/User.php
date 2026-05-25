@@ -3,14 +3,25 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
+
+    /**
+     * Determine if the user can access the given panel.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->hasAnyRole(['admin', 'employee']);
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -25,14 +36,14 @@ class User extends Authenticatable
         'mobile',
         'city',
         'state',
-        'resume',
-        'current_company_name',
-        'current_position',
-        'eduction',
-        'current_ctc',
-        'expected_ctc',
-        'reason_for_job_change',
-        'notice_period',
+        'residential_address',
+        'emergency_contact_name',
+        'emergency_contact_relation',
+        'emergency_contact_number',
+        'emergency_contact_address',
+        'reporting_to_id',
+        'work_location',
+        'joining_date',
     ];
 
     /**
@@ -55,6 +66,15 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'joining_date' => 'date',
         ];
+    }
+
+    /**
+     * Get the user that this user reports to.
+     */
+    public function reportingTo(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reporting_to_id');
     }
 }

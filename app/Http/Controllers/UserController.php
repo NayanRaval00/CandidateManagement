@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Candidate;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
@@ -17,7 +18,7 @@ class UserController extends Controller
         $request->validate(
             [
                 'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email',
+                'email' => 'required|email|unique:candidates,email',
                 'position' => 'required|string|max:255',
                 'mobile' => 'required|string|max:20',
                 'city' => 'required|string|max:255',
@@ -53,7 +54,7 @@ class UserController extends Controller
         }
 
 
-        User::create($data);
+        Candidate::create($data);
 
         return redirect()->back()->with('success', 'Thank you for applying! Our HR team will be in touch with you shortly!');
     }
