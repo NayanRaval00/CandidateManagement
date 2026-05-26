@@ -23,7 +23,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Create default admin user if not exists
         $admin = User::firstOrCreate(
-            ['email' => 'employee@example.com'],
+            ['email' => 'admin@gmail.com'],
             [
                 'name' => 'System Admin',
                 'password' => Hash::make('password'),
@@ -40,6 +40,40 @@ class RolesAndPermissionsSeeder extends Seeder
         $testUser = User::where('email', 'nayan@gmail.com')->first();
         if ($testUser && !$testUser->hasRole('employee')) {
             $testUser->assignRole($employeeRole);
+        }
+
+        // Seed default leave types
+        $leaveTypes = [
+            [
+                'name' => 'Annual Leave',
+                'code' => 'annual',
+                'description' => 'Regular annual leave balance allocated to employees.',
+                'default_balance' => 15,
+            ],
+            [
+                'name' => 'Sick Leave',
+                'code' => 'sick',
+                'description' => 'Allocated leave for medical purposes.',
+                'default_balance' => 10,
+            ],
+            [
+                'name' => 'Casual Leave',
+                'code' => 'casual',
+                'description' => 'Used for personal work or urgent matters.',
+                'default_balance' => 8,
+            ],
+        ];
+
+        foreach ($leaveTypes as $typeData) {
+            \App\Models\LeaveType::firstOrCreate(
+                ['code' => $typeData['code']],
+                $typeData
+            );
+        }
+
+        // Initialize balances for all users
+        foreach (User::all() as $user) {
+            $user->initializeLeaveBalances();
         }
     }
 }

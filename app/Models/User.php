@@ -77,4 +77,37 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->belongsTo(User::class, 'reporting_to_id');
     }
+
+    /**
+     * Get the leave balances for this user.
+     */
+    public function leaveBalances(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LeaveBalance::class);
+    }
+
+    /**
+     * Get the leave requests for this user.
+     */
+    public function leaveRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
+    /**
+     * Lazy initialize leave balances for the user if they are missing.
+     */
+    public function initializeLeaveBalances(): void
+    {
+        $leaveTypes = LeaveType::all();
+        foreach ($leaveTypes as $type) {
+            LeaveBalance::firstOrCreate([
+                'user_id' => $this->id,
+                'leave_type_id' => $type->id,
+            ], [
+                'balance' => $type->default_balance,
+                'used' => 0,
+            ]);
+        }
+    }
 }

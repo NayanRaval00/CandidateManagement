@@ -24,7 +24,7 @@ class UserProfileTest extends TestCase
 
         $employee = User::create([
             'name' => 'Employee User',
-            'email' => 'employee@example.com',
+            'email' => 'admin@gmail.com',
             'password' => bcrypt('password'),
             'position' => 'Developer',
             'mobile' => '1234567890',
@@ -48,7 +48,7 @@ class UserProfileTest extends TestCase
         $this->assertEquals('123 Main St, SF, CA', $employee->emergency_contact_address);
         $this->assertEquals($manager->id, $employee->reporting_to_id);
         $this->assertEquals('Remote', $employee->work_location);
-        
+
         // Assert joining_date is cast to Carbon instance
         $this->assertInstanceOf(\Carbon\Carbon::class, $employee->joining_date);
         $this->assertEquals('2026-05-01', $employee->joining_date->format('Y-m-d'));
