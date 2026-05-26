@@ -2,11 +2,11 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Dashboard;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -16,9 +16,9 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Filament\Tables\Exports\ExportBulkAction;
-use Maatwebsite\Excel\Excel;
+use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -37,10 +37,13 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('Innoventix Solutions')
             ->brandLogo(asset('images/logo-1.svg'))
             // ->brandLogoHeight('3rem')
+            ->plugins([
+                FilamentFullCalendarPlugin::make(),
+            ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
-                \App\Filament\Pages\Dashboard::class,
+                Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
@@ -63,7 +66,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 'panels::body.end',
-                fn () => \Illuminate\Support\Facades\Blade::render("@livewire('notification-poller')")
+                fn () => Blade::render("@livewire('notification-poller')")
             );
     }
 }
