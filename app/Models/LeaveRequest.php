@@ -65,6 +65,39 @@ class LeaveRequest extends Model
             } catch (\Exception $e) {
                 Log::error('Failed to send leave applied mail: ' . $e->getMessage());
             }
+
+            // Send database notifications to manager and admins
+            try {
+                $notificationRecipients = [];
+                $manager = $leaveRequest->user->reportingTo;
+                if ($manager) {
+                    $notificationRecipients[] = $manager;
+                }
+
+                // Get all admin users
+                $admins = User::role('admin')->get();
+                foreach ($admins as $admin) {
+                    $notificationRecipients[] = $admin;
+                }
+
+                // Keep unique users by ID
+                $notificationRecipients = collect($notificationRecipients)->unique('id');
+
+                foreach ($notificationRecipients as $recipient) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('New Leave Request')
+                        ->body("{$leaveRequest->user->name} has requested {$leaveRequest->days} days of {$leaveRequest->leaveType->name}.")
+                        ->icon('heroicon-o-calendar')
+                        ->actions([
+                            \Filament\Notifications\Actions\Action::make('view')
+                                ->button()
+                                ->url(fn() => \App\Filament\Resources\LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
+                        ])
+                        ->sendToDatabase($recipient);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to send database notifications for leave applied: ' . $e->getMessage());
+            }
         });
 
         static::updated(function ($leaveRequest) {
@@ -90,12 +123,28 @@ class LeaveRequest extends Model
                     }
                 }
 
-                // Send email to employee
+                // Send email and database notification to employee
                 if ($newStatus !== 'pending') {
                     try {
                         Mail::to($leaveRequest->user->email)->send(new \App\Mail\LeaveStatusUpdatedMail($leaveRequest));
                     } catch (\Exception $e) {
                         Log::error('Failed to send leave status updated mail: ' . $e->getMessage());
+                    }
+
+                    try {
+                        \Filament\Notifications\Notification::make()
+                            ->title("Leave Request " . ucfirst($newStatus))
+                            ->body("Your leave request for {$leaveRequest->leaveType->name} has been {$newStatus}.")
+                            ->icon($newStatus === 'approved' ? 'heroicon-o-check-circle' : 'heroicon-o-x-circle')
+                            ->color($newStatus === 'approved' ? 'success' : 'danger')
+                            ->actions([
+                                \Filament\Notifications\Actions\Action::make('view')
+                                    ->button()
+                                    ->url(fn() => \App\Filament\Resources\LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
+                            ])
+                            ->sendToDatabase($leaveRequest->user);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to send database notification for leave status updated: ' . $e->getMessage());
                     }
                 }
             }

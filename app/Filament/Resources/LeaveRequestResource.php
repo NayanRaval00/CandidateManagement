@@ -22,6 +22,16 @@ class LeaveRequestResource extends Resource
     protected static ?string $navigationGroup = 'Leave Management';
     protected static ?int $navigationSort = 1;
 
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getEloquentQuery()->where('status', 'pending')->count();
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public static function form(Form $form): Form
     {
         return $form

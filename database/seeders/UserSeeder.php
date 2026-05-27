@@ -16,7 +16,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         User::firstOrCreate([
-            'email' => 'nayan@gmail.com'
+            'email' => 'nayan@yopmail.com'
         ], [
             'name' => 'System User',
             'email_verified_at' => Carbon::now(),

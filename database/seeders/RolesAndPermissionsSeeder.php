@@ -23,7 +23,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Create default admin user if not exists
         $admin = User::firstOrCreate(
-            ['email' => 'admin@gmail.com'],
+            ['email' => 'admin@yopmail.com'],
             [
                 'name' => 'System Admin',
                 'password' => Hash::make('password'),
@@ -37,7 +37,7 @@ class RolesAndPermissionsSeeder extends Seeder
         }
 
         // Assign employee role to existing  user
-        $testUser = User::where('email', 'nayan@gmail.com')->first();
+        $testUser = User::where('email', 'nayan@yopmail.com')->first();
         if ($testUser && !$testUser->hasRole('employee')) {
             $testUser->assignRole($employeeRole);
         }
