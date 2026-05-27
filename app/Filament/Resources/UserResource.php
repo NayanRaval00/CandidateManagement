@@ -6,23 +6,19 @@ use App\Filament\Resources\UserResource\Pages;
 use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\User;
 use Filament\Forms;
-use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Hash;
-use Maatwebsite\Excel\Excel;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportBulkAction;
-use App\Exports\UsersExport;
-use pxlrbt\FilamentExcel\Exports\ExcelExport;
 use pxlrbt\FilamentExcel\Columns\Column;
+use pxlrbt\FilamentExcel\Exports\ExcelExport;
 
 class UserResource extends Resource
 {
@@ -38,27 +34,35 @@ class UserResource extends Resource
                     ->schema([
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                Forms\Components\TextInput::make('name')
+                                TextInput::make('name')
                                     ->required()
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('email')
+                                TextInput::make('email')
                                     ->email()
                                     ->required()
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('password')
+                                TextInput::make('password')
                                     ->password()
-                                    ->required(fn(string $context) => $context === 'create')
-                                    ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
-                                    ->dehydrated(fn($state) => filled($state))
+                                    ->required(fn (string $context) => $context === 'create')
+                                    ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
+                                    ->dehydrated(fn ($state) => filled($state))
                                     ->label('Password')
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('mobile')
+                                TextInput::make('mobile')
                                     ->maxLength(20),
-                                Forms\Components\Select::make('roles')
+                                Select::make('roles')
                                     ->relationship('roles', 'name')
                                     ->preload()
                                     ->required()
                                     ->label('Role'),
+                                Select::make('status')
+                                    ->options([
+                                        'Active' => 'Active',
+                                        'Inactive' => 'Inactive',
+                                    ])
+                                    ->required()
+                                    ->default('Active')
+                                    ->label('Status'),
                             ]),
                     ])->compact(),
 
@@ -66,17 +70,16 @@ class UserResource extends Resource
                     ->schema([
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                Forms\Components\TextInput::make('position')
+                                TextInput::make('position')
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('work_location')
+                                TextInput::make('work_location')
                                     ->label('Office / Work Location')
                                     ->maxLength(255),
                                 Forms\Components\DatePicker::make('joining_date')
                                     ->label('Joining Date')
                                     ->native(false),
-                                Forms\Components\Select::make('reporting_to_id')
-                                    ->relationship('reportingTo', 'name', modifyQueryUsing: fn (Builder $query, ?User $record) => 
-                                        $record ? $query->where('id', '!=', $record->id) : $query
+                                Select::make('reporting_to_id')
+                                    ->relationship('reportingTo', 'name', modifyQueryUsing: fn (Builder $query, ?User $record) => $record ? $query->where('id', '!=', $record->id) : $query
                                     )
                                     ->label('Reporting To')
                                     ->searchable()
@@ -88,11 +91,11 @@ class UserResource extends Resource
                     ->schema([
                         Forms\Components\Grid::make(2)
                             ->schema([
-                                Forms\Components\TextInput::make('city')
+                                TextInput::make('city')
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('state')
+                                TextInput::make('state')
                                     ->maxLength(255),
-                                Forms\Components\Textarea::make('residential_address')
+                                Textarea::make('residential_address')
                                     ->label('Residential Address')
                                     ->columnSpanFull()
                                     ->rows(3),
@@ -103,17 +106,17 @@ class UserResource extends Resource
                     ->schema([
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                Forms\Components\TextInput::make('emergency_contact_name')
+                                TextInput::make('emergency_contact_name')
                                     ->label('Emergency Contact Name')
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('emergency_contact_relation')
+                                TextInput::make('emergency_contact_relation')
                                     ->label('Emergency Contact Relation')
                                     ->maxLength(255),
-                                Forms\Components\TextInput::make('emergency_contact_number')
+                                TextInput::make('emergency_contact_number')
                                     ->label('Emergency Contact Number')
                                     ->tel()
                                     ->maxLength(20),
-                                Forms\Components\Textarea::make('emergency_contact_address')
+                                Textarea::make('emergency_contact_address')
                                     ->label('Emergency Contact Address')
                                     ->columnSpanFull()
                                     ->rows(3),
@@ -132,6 +135,14 @@ class UserResource extends Resource
                 TextColumn::make('work_location')->label('Work Location')->sortable()->searchable(),
                 TextColumn::make('joining_date')->date()->sortable(),
                 TextColumn::make('reportingTo.name')->label('Reporting To')->sortable(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Active' => 'success',
+                        'Inactive' => 'danger',
+                        default => 'gray',
+                    })
+                    ->sortable(),
                 TextColumn::make('created_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -165,12 +176,11 @@ class UserResource extends Resource
                                     Column::make('reportingTo.name')->heading('Reporting To'),
                                     Column::make('work_location'),
                                     Column::make('joining_date'),
+                                    Column::make('status'),
                                     Column::make('created_at'),
                                 ])
-                                ->withFilename('users_export_' . now()->format('Y_m_d_His'))
+                                ->withFilename('users_export_'.now()->format('Y_m_d_His')),
                         ]),
-
-
 
                 ]),
             ])
@@ -195,9 +205,10 @@ class UserResource extends Resource
                                 Column::make('reportingTo.name')->heading('Reporting To'),
                                 Column::make('work_location'),
                                 Column::make('joining_date'),
+                                Column::make('status'),
                                 Column::make('created_at'),
                             ])
-                            ->withFilename('users_export_' . now()->format('Y_m_d_His'))
+                            ->withFilename('users_export_'.now()->format('Y_m_d_His')),
                     ]),
             ]);
     }
@@ -205,7 +216,9 @@ class UserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\LeaveBalancesRelationManager::class,
+            RelationManagers\LeaveRequestsRelationManager::class,
+            RelationManagers\AssetsRelationManager::class,
         ];
     }
 

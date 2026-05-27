@@ -3,25 +3,38 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, HasRoles, Notifiable;
 
     /**
      * Determine if the user can access the given panel.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasAnyRole(['admin', 'employee']);
+        return ($this->status ?? 'Active') === 'Active' && $this->hasAnyRole(['admin', 'employee']);
     }
+
+    /**
+     * The model's default values for attributes.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => 'Active',
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -44,6 +57,7 @@ class User extends Authenticatable implements FilamentUser
         'reporting_to_id',
         'work_location',
         'joining_date',
+        'status',
     ];
 
     /**
@@ -73,7 +87,7 @@ class User extends Authenticatable implements FilamentUser
     /**
      * Get the user that this user reports to.
      */
-    public function reportingTo(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function reportingTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reporting_to_id');
     }
@@ -81,7 +95,7 @@ class User extends Authenticatable implements FilamentUser
     /**
      * Get the leave balances for this user.
      */
-    public function leaveBalances(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function leaveBalances(): HasMany
     {
         return $this->hasMany(LeaveBalance::class);
     }
@@ -89,7 +103,7 @@ class User extends Authenticatable implements FilamentUser
     /**
      * Get the leave requests for this user.
      */
-    public function leaveRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
     }
@@ -109,5 +123,15 @@ class User extends Authenticatable implements FilamentUser
                 'used' => 0,
             ]);
         }
+    }
+
+    /**
+     * Get the assets assigned to this user.
+     */
+    public function assets(): BelongsToMany
+    {
+        return $this->belongsToMany(Asset::class, 'asset_user')
+            ->withPivot('assigned_at', 'returned_at', 'notes')
+            ->withTimestamps();
     }
 }

@@ -7,6 +7,7 @@ use Livewire\Component;
 class NotificationPoller extends Component
 {
     public $lastCheckedTime;
+
     public $processedIds = [];
 
     public function mount()
@@ -20,13 +21,11 @@ class NotificationPoller extends Component
     public function checkNotifications()
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
-        $newNotifications = $user->unreadNotifications()
-            ->where('created_at', '>=', $this->lastCheckedTime)
-            ->get();
+        $newNotifications = $user->unreadNotifications()->get();
 
         foreach ($newNotifications as $notification) {
             if (in_array($notification->id, $this->processedIds)) {
@@ -38,7 +37,7 @@ class NotificationPoller extends Component
             $this->dispatch('play-notification-sound', [
                 'title' => $notification->data['title'] ?? 'Notification',
                 'body' => $notification->data['body'] ?? '',
-                'color' => $notification->data['status'] ?? 'info',
+                'color' => $notification->data['color'] ?? 'info',
                 'icon' => $notification->data['icon'] ?? 'heroicon-o-bell',
             ]);
         }
@@ -46,8 +45,6 @@ class NotificationPoller extends Component
         if (count($this->processedIds) > 100) {
             $this->processedIds = array_slice($this->processedIds, -100);
         }
-
-        $this->lastCheckedTime = now()->subSeconds(2)->toDateTimeString();
     }
 
     public function render()

@@ -42,12 +42,14 @@ class Holiday extends Model
                 foreach ($users as $user) {
                     // Send database notification
                     try {
-                        FilamentNotification::make()
-                            ->title("Today is a Holiday: {$holiday->name}")
-                            ->body($holiday->is_working_day ? 'Note: Today is a working holiday.' : 'Office is closed today.')
-                            ->color($holiday->is_working_day ? 'info' : 'danger')
-                            ->icon('heroicon-o-calendar')
-                            ->sendToDatabase($user);
+                        $user->notifyNow(
+                            FilamentNotification::make()
+                                ->title("Today is a Holiday: {$holiday->name}")
+                                ->body($holiday->is_working_day ? 'Note: Today is a working holiday.' : 'Office is closed today.')
+                                ->color($holiday->is_working_day ? 'info' : 'danger')
+                                ->icon('heroicon-o-calendar')
+                                ->toDatabase()
+                        );
                     } catch (\Exception $e) {
                         Log::error("Failed to send database notification to {$user->email}: ".$e->getMessage());
                     }

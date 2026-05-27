@@ -32,7 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->authGuard('web')
             ->databaseNotifications()
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Indigo,
             ])
             ->brandName('Innoventix Solutions')
             ->brandLogo(asset('images/logo-1.svg'))

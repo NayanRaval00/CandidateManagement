@@ -37,12 +37,14 @@ class SendHolidayNotifications extends Command
             foreach ($users as $user) {
                 // Send database notification
                 try {
-                    FilamentNotification::make()
-                        ->title("Tomorrow is a Holiday: {$holiday->name}")
-                        ->body($holiday->is_working_day ? 'Note: Tomorrow is a working holiday.' : 'Office will be closed tomorrow.')
-                        ->color($holiday->is_working_day ? 'info' : 'danger')
-                        ->icon('heroicon-o-calendar')
-                        ->sendToDatabase($user);
+                    $user->notifyNow(
+                        FilamentNotification::make()
+                            ->title("Tomorrow is a Holiday: {$holiday->name}")
+                            ->body($holiday->is_working_day ? 'Note: Tomorrow is a working holiday.' : 'Office will be closed tomorrow.')
+                            ->color($holiday->is_working_day ? 'info' : 'danger')
+                            ->icon('heroicon-o-calendar')
+                            ->toDatabase()
+                    );
                 } catch (\Exception $e) {
                     Log::error("Failed to send database notification for tomorrow holiday to {$user->email}: ".$e->getMessage());
                 }

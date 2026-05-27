@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use App\Models\LeaveType;
+use App\Filament\Resources\LeaveRequestResource;
+use App\Filament\Resources\LeaveRequestResource\Pages\CreateLeaveRequest;
+use App\Mail\LeaveStatusUpdatedMail;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
-use App\Filament\Resources\LeaveRequestResource;
+use App\Models\LeaveType;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -127,7 +131,7 @@ class LeaveManagementTest extends TestCase
 
         $this->actingAs($employee);
 
-        \Livewire\Livewire::test(\App\Filament\Resources\LeaveRequestResource\Pages\CreateLeaveRequest::class)
+        Livewire::test(CreateLeaveRequest::class)
             ->fillForm([
                 'leave_type_id' => $annualType->id,
                 'start_date' => '2026-05-25',
@@ -145,5 +149,38 @@ class LeaveManagementTest extends TestCase
             'reason' => 'Annual vacation',
         ]);
     }
-}
 
+    /** @test */
+    public function it_sends_notification_and_email_on_approval()
+    {
+        Mail::fake();
+
+        $employee = User::create([
+            'name' => 'Test Employee',
+            'email' => 'employee@gmail.com',
+            'password' => bcrypt('password'),
+        ]);
+        $employee->initializeLeaveBalances();
+
+        $annualType = LeaveType::where('code', 'annual')->first();
+
+        $request = LeaveRequest::create([
+            'user_id' => $employee->id,
+            'leave_type_id' => $annualType->id,
+            'start_date' => '2026-05-25',
+            'end_date' => '2026-05-29',
+            'days' => 5,
+            'reason' => 'Annual vacation',
+            'status' => 'pending',
+        ]);
+
+        $request->update(['status' => 'approved']);
+
+        Mail::assertSent(LeaveStatusUpdatedMail::class, function ($mail) use ($employee) {
+            return $mail->hasTo($employee->email);
+        });
+
+        $this->assertCount(1, $employee->unreadNotifications);
+        $this->assertStringContainsString('Approved', $employee->unreadNotifications->first()->data['title']);
+    }
+}

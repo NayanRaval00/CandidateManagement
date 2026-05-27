@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Filament\Resources\LeaveRequestResource;
+use App\Mail\LeaveAppliedMail;
+use App\Mail\LeaveStatusUpdatedMail;
+use Filament\Notifications\Actions\Action;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class LeaveRequest extends Model
 {
@@ -59,11 +64,11 @@ class LeaveRequest extends Model
                 $recipients = array_merge($recipients, $adminEmails);
                 $recipients = array_unique(array_filter($recipients));
 
-                if (!empty($recipients)) {
-                    Mail::to($recipients)->send(new \App\Mail\LeaveAppliedMail($leaveRequest));
+                if (! empty($recipients)) {
+                    Mail::to($recipients)->send(new LeaveAppliedMail($leaveRequest));
                 }
             } catch (\Exception $e) {
-                Log::error('Failed to send leave applied mail: ' . $e->getMessage());
+                Log::error('Failed to send leave applied mail: '.$e->getMessage());
             }
 
             // Send database notifications to manager and admins
@@ -84,19 +89,21 @@ class LeaveRequest extends Model
                 $notificationRecipients = collect($notificationRecipients)->unique('id');
 
                 foreach ($notificationRecipients as $recipient) {
-                    \Filament\Notifications\Notification::make()
-                        ->title('New Leave Request')
-                        ->body("{$leaveRequest->user->name} has requested {$leaveRequest->days} days of {$leaveRequest->leaveType->name}.")
-                        ->icon('heroicon-o-calendar')
-                        ->actions([
-                            \Filament\Notifications\Actions\Action::make('view')
-                                ->button()
-                                ->url(fn() => \App\Filament\Resources\LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
-                        ])
-                        ->sendToDatabase($recipient);
+                    $recipient->notifyNow(
+                        Notification::make()
+                            ->title('New Leave Request')
+                            ->body("{$leaveRequest->user->name} has requested {$leaveRequest->days} days of {$leaveRequest->leaveType->name}.")
+                            ->icon('heroicon-o-calendar')
+                            ->actions([
+                                Action::make('view')
+                                    ->button()
+                                    ->url(fn () => LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
+                            ])
+                            ->toDatabase()
+                    );
                 }
             } catch (\Exception $e) {
-                Log::error('Failed to send database notifications for leave applied: ' . $e->getMessage());
+                Log::error('Failed to send database notifications for leave applied: '.$e->getMessage());
             }
         });
 
@@ -126,25 +133,27 @@ class LeaveRequest extends Model
                 // Send email and database notification to employee
                 if ($newStatus !== 'pending') {
                     try {
-                        Mail::to($leaveRequest->user->email)->send(new \App\Mail\LeaveStatusUpdatedMail($leaveRequest));
+                        Mail::to($leaveRequest->user->email)->send(new LeaveStatusUpdatedMail($leaveRequest));
                     } catch (\Exception $e) {
-                        Log::error('Failed to send leave status updated mail: ' . $e->getMessage());
+                        Log::error('Failed to send leave status updated mail: '.$e->getMessage());
                     }
 
                     try {
-                        \Filament\Notifications\Notification::make()
-                            ->title("Leave Request " . ucfirst($newStatus))
-                            ->body("Your leave request for {$leaveRequest->leaveType->name} has been {$newStatus}.")
-                            ->icon($newStatus === 'approved' ? 'heroicon-o-check-circle' : 'heroicon-o-x-circle')
-                            ->color($newStatus === 'approved' ? 'success' : 'danger')
-                            ->actions([
-                                \Filament\Notifications\Actions\Action::make('view')
-                                    ->button()
-                                    ->url(fn() => \App\Filament\Resources\LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
-                            ])
-                            ->sendToDatabase($leaveRequest->user);
+                        $leaveRequest->user->notifyNow(
+                            Notification::make()
+                                ->title('Leave Request '.ucfirst($newStatus))
+                                ->body("Your leave request for {$leaveRequest->leaveType->name} has been {$newStatus}.")
+                                ->icon($newStatus === 'approved' ? 'heroicon-o-check-circle' : 'heroicon-o-x-circle')
+                                ->color($newStatus === 'approved' ? 'success' : 'danger')
+                                ->actions([
+                                    Action::make('view')
+                                        ->button()
+                                        ->url(fn () => LeaveRequestResource::getUrl('view', ['record' => $leaveRequest->id])),
+                                ])
+                                ->toDatabase()
+                        );
                     } catch (\Exception $e) {
-                        Log::error('Failed to send database notification for leave status updated: ' . $e->getMessage());
+                        Log::error('Failed to send database notification for leave status updated: '.$e->getMessage());
                     }
                 }
             }

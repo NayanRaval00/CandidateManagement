@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Filament\Notifications\Notification as FilamentNotification;
 
 class SystemNotification extends Model
 {
@@ -35,22 +35,24 @@ class SystemNotification extends Model
 
             // Send notification to each target user
             foreach ($users as $user) {
-                FilamentNotification::make()
-                    ->title($systemNotification->title)
-                    ->body(strip_tags($systemNotification->content))
-                    ->color(match ($systemNotification->type) {
-                        'success' => 'success',
-                        'warning' => 'warning',
-                        'danger' => 'danger',
-                        default => 'info',
-                    })
-                    ->icon(match ($systemNotification->type) {
-                        'success' => 'heroicon-o-check-circle',
-                        'warning' => 'heroicon-o-exclamation-triangle',
-                        'danger' => 'heroicon-o-x-circle',
-                        default => 'heroicon-o-information-circle',
-                    })
-                    ->sendToDatabase($user);
+                $user->notifyNow(
+                    FilamentNotification::make()
+                        ->title($systemNotification->title)
+                        ->body(strip_tags($systemNotification->content))
+                        ->color(match ($systemNotification->type) {
+                            'success' => 'success',
+                            'warning' => 'warning',
+                            'danger' => 'danger',
+                            default => 'info',
+                        })
+                        ->icon(match ($systemNotification->type) {
+                            'success' => 'heroicon-o-check-circle',
+                            'warning' => 'heroicon-o-exclamation-triangle',
+                            'danger' => 'heroicon-o-x-circle',
+                            default => 'heroicon-o-information-circle',
+                        })
+                        ->toDatabase()
+                );
             }
         });
     }

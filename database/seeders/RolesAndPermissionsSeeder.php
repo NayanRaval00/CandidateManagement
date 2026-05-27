@@ -2,10 +2,13 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use App\Models\Asset;
+use App\Models\LeaveType;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -15,7 +18,7 @@ class RolesAndPermissionsSeeder extends Seeder
     public function run(): void
     {
         // Reset cached roles and permissions
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         // Create roles
         $adminRole = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
@@ -32,13 +35,13 @@ class RolesAndPermissionsSeeder extends Seeder
         );
 
         // Assign admin role
-        if (!$admin->hasRole('admin')) {
+        if (! $admin->hasRole('admin')) {
             $admin->assignRole($adminRole);
         }
 
         // Assign employee role to existing  user
         $testUser = User::where('email', 'nayan@yopmail.com')->first();
-        if ($testUser && !$testUser->hasRole('employee')) {
+        if ($testUser && ! $testUser->hasRole('employee')) {
             $testUser->assignRole($employeeRole);
         }
 
@@ -65,7 +68,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         foreach ($leaveTypes as $typeData) {
-            \App\Models\LeaveType::firstOrCreate(
+            LeaveType::firstOrCreate(
                 ['code' => $typeData['code']],
                 $typeData
             );
@@ -74,6 +77,54 @@ class RolesAndPermissionsSeeder extends Seeder
         // Initialize balances for all users
         foreach (User::all() as $user) {
             $user->initializeLeaveBalances();
+        }
+
+        // Seed mock assets
+        $assets = [
+            [
+                'name' => 'MacBook Pro 16"',
+                'serial_number' => 'MP16-2026-X89',
+                'type' => 'Hardware',
+                'status' => 'Assigned',
+                'description' => 'M3 Max, 64GB RAM, 1TB SSD',
+            ],
+            [
+                'name' => 'Dell UltraSharp 27" Monitor',
+                'serial_number' => 'DELL-27-U2723QE',
+                'type' => 'Hardware',
+                'status' => 'Assigned',
+                'description' => '4K USB-C Hub Monitor',
+            ],
+            [
+                'name' => 'Logitech MX Master 3S Mouse',
+                'serial_number' => 'LOGI-MX-3S',
+                'type' => 'Hardware',
+                'status' => 'Available',
+                'description' => 'Wireless Mouse with silent clicks',
+            ],
+        ];
+
+        $seededAssets = [];
+        foreach ($assets as $assetData) {
+            $seededAssets[] = Asset::firstOrCreate(
+                ['serial_number' => $assetData['serial_number']],
+                $assetData
+            );
+        }
+
+        // Assign some assets to employee Nayan
+        $employee = User::where('email', 'nayan@gmail.com')->first();
+        if ($employee) {
+            foreach ($seededAssets as $asset) {
+                if ($asset->status === 'Assigned') {
+                    $employee->assets()->syncWithoutDetaching([
+                        $asset->id => [
+                            'assigned_at' => now(),
+                            'notes' => 'Assigned during onboarding.',
+                        ],
+                    ]);
+                }
+            }
         }
     }
 }
