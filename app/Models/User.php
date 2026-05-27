@@ -134,4 +134,12 @@ class User extends Authenticatable implements FilamentUser
             ->withPivot('assigned_at', 'returned_at', 'notes')
             ->withTimestamps();
     }
+
+    /**
+     * Get the attendances for this user.
+     */
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class);
+    }
 }

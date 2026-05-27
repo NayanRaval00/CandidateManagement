@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Asset;
+use App\Models\AttendanceSetting;
 use App\Models\LeaveType;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -126,5 +127,8 @@ class RolesAndPermissionsSeeder extends Seeder
                 }
             }
         }
+
+        // Seed default attendance setting singleton
+        AttendanceSetting::getSingleton();
     }
 }
