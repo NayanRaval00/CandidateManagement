@@ -66,7 +66,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 'panels::body.end',
-                fn () => Blade::render("@livewire('notification-poller')")
+                fn () => Blade::render("@livewire('notification-poller') @livewire('innoventix-chatbot')")
             );
     }
 }

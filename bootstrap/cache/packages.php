@@ -83,6 +83,13 @@
       0 => 'Kirschbaum\\PowerJoins\\PowerJoinsServiceProvider',
     ),
   ),
+  'laravel/ai' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Ai\\AiServiceProvider',
+    ),
+  ),
   'laravel/boost' => 
   array (
     'providers' => 
@@ -149,6 +156,17 @@
     'providers' => 
     array (
       0 => 'Maatwebsite\\Excel\\ExcelServiceProvider',
+    ),
+  ),
+  'nayanraval/query-pilot' => 
+  array (
+    'aliases' => 
+    array (
+      'QueryPilot' => 'QueryPilot\\Facades\\QueryPilot',
+    ),
+    'providers' => 
+    array (
+      0 => 'QueryPilot\\Providers\\QueryPilotServiceProvider',
     ),
   ),
   'nesbot/carbon' => 
