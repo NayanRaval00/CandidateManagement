@@ -26,6 +26,7 @@ class HolidayCalendarWidget extends FullCalendarWidget
     public function fetchEvents(array $fetchInfo): array
     {
         return Holiday::query()
+            ->select('id', 'name', 'is_working_day', 'date')
             ->where('date', '>=', $fetchInfo['start'])
             ->where('date', '<=', $fetchInfo['end'])
             ->get()

@@ -222,6 +222,11 @@ class UserResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('reportingTo');
+    }
+
     public static function getPages(): array
     {
         return [

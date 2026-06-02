@@ -3,23 +3,26 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\LeaveRequestResource\Pages;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\User;
-use App\Models\LeaveBalance;
+use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Filament\Notifications\Notification;
 
 class LeaveRequestResource extends Resource
 {
     protected static ?string $model = LeaveRequest::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
+
     protected static ?string $navigationGroup = 'Leave Management';
+
     protected static ?int $navigationSort = 1;
 
     public static function getNavigationBadge(): ?string
@@ -74,17 +77,18 @@ class LeaveRequestResource extends Resource
                             ->rules([
                                 fn ($get) => function (string $attribute, $value, $fail) use ($get) {
                                     $leaveTypeId = $get('leave_type_id');
-                                    if (!$leaveTypeId || !$value) {
+                                    if (! $leaveTypeId || ! $value) {
                                         return;
                                     }
-                                    
+
                                     if ($value <= 0) {
-                                        $fail("Leave duration must be at least 1 weekday.");
+                                        $fail('Leave duration must be at least 1 weekday.');
+
                                         return;
                                     }
 
                                     $userId = auth()->user()->hasRole('admin') ? ($get('user_id') ?? auth()->id()) : auth()->id();
-                                    
+
                                     // Lazy initialize if needed
                                     $user = User::find($userId);
                                     if ($user) {
@@ -95,8 +99,9 @@ class LeaveRequestResource extends Resource
                                         ->where('leave_type_id', $leaveTypeId)
                                         ->first();
 
-                                    if (!$balance) {
-                                        $fail("No leave balance record found for the selected employee.");
+                                    if (! $balance) {
+                                        $fail('No leave balance record found for the selected employee.');
+
                                         return;
                                     }
 
@@ -104,7 +109,7 @@ class LeaveRequestResource extends Resource
                                     if ($value > $remaining) {
                                         $fail("Requested duration of {$value} days exceeds the remaining balance of {$remaining} days.");
                                     }
-                                }
+                                },
                             ]),
 
                         Forms\Components\Textarea::make('reason')
@@ -131,22 +136,24 @@ class LeaveRequestResource extends Resource
                             ->columnSpanFull(),
                     ])
                     ->visible(fn ($context) => $context === 'edit' || $context === 'view')
-                    ->columns(2)
+                    ->columns(2),
             ]);
     }
 
     public static function calculateDays(?string $start, ?string $end, callable $set): void
     {
-        if (!$start || !$end) {
+        if (! $start || ! $end) {
             $set('days', 0);
+
             return;
         }
 
-        $startDate = \Carbon\Carbon::parse($start);
-        $endDate = \Carbon\Carbon::parse($end);
+        $startDate = Carbon::parse($start);
+        $endDate = Carbon::parse($end);
 
         if ($startDate->gt($endDate)) {
             $set('days', 0);
+
             return;
         }
 
@@ -154,7 +161,7 @@ class LeaveRequestResource extends Resource
         $days = 0;
         $current = $startDate->copy();
         while ($current->lte($endDate)) {
-            if (!$current->isWeekend()) {
+            if (! $current->isWeekend()) {
                 $days++;
             }
             $current->addDay();
@@ -197,7 +204,7 @@ class LeaveRequestResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
                     ->visible(fn (LeaveRequest $record) => auth()->user()->can('update', $record)),
-                
+
                 Tables\Actions\Action::make('approve')
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
@@ -223,7 +230,7 @@ class LeaveRequestResource extends Resource
                     ->form([
                         Forms\Components\Textarea::make('rejection_reason')
                             ->required()
-                            ->label('Reason for Rejection')
+                            ->label('Reason for Rejection'),
                     ])
                     ->action(function (LeaveRequest $record, array $data) {
                         $record->update([
@@ -261,9 +268,7 @@ class LeaveRequestResource extends Resource
         // Other employees can only see their own requests.
         return $query->where(function (Builder $q) use ($user) {
             $q->where('user_id', $user->id)
-              ->orWhereHas('user', function (Builder $uq) use ($user) {
-                  $uq->where('reporting_to_id', $user->id);
-              });
+                ->orWhereIn('user_id', User::where('reporting_to_id', $user->id)->select('id'));
         });
     }
 

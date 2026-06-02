@@ -25,13 +25,13 @@ class NotificationPoller extends Component
             return;
         }
 
-        $newNotifications = $user->unreadNotifications()->get();
+        $newNotifications = $user->unreadNotifications()
+            ->whereNotIn('id', $this->processedIds)
+            ->latest()
+            ->limit(10)
+            ->get();
 
         foreach ($newNotifications as $notification) {
-            if (in_array($notification->id, $this->processedIds)) {
-                continue;
-            }
-
             $this->processedIds[] = $notification->id;
 
             $this->dispatch('play-notification-sound', [

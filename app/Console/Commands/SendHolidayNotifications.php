@@ -29,33 +29,33 @@ class SendHolidayNotifications extends Command
             return 0;
         }
 
-        $users = User::all();
-
         foreach ($holidays as $holiday) {
             $this->info("Processing holiday notification for tomorrow: {$holiday->name}");
 
-            foreach ($users as $user) {
-                // Send database notification
-                try {
-                    $user->notifyNow(
-                        FilamentNotification::make()
-                            ->title("Tomorrow is a Holiday: {$holiday->name}")
-                            ->body($holiday->is_working_day ? 'Note: Tomorrow is a working holiday.' : 'Office will be closed tomorrow.')
-                            ->color($holiday->is_working_day ? 'info' : 'danger')
-                            ->icon('heroicon-o-calendar')
-                            ->toDatabase()
-                    );
-                } catch (\Exception $e) {
-                    Log::error("Failed to send database notification for tomorrow holiday to {$user->email}: ".$e->getMessage());
-                }
+            User::select('id', 'email')->chunk(200, function ($users) use ($holiday) {
+                foreach ($users as $user) {
+                    // Send database notification
+                    try {
+                        $user->notifyNow(
+                            FilamentNotification::make()
+                                ->title("Tomorrow is a Holiday: {$holiday->name}")
+                                ->body($holiday->is_working_day ? 'Note: Tomorrow is a working holiday.' : 'Office will be closed tomorrow.')
+                                ->color($holiday->is_working_day ? 'info' : 'danger')
+                                ->icon('heroicon-o-calendar')
+                                ->toDatabase()
+                        );
+                    } catch (\Exception $e) {
+                        Log::error("Failed to send database notification for tomorrow holiday to {$user->email}: ".$e->getMessage());
+                    }
 
-                // Send email
-                try {
-                    Mail::to($user->email)->send(new HolidayNotificationMail($holiday, false));
-                } catch (\Exception $e) {
-                    Log::error("Failed to send holiday email to {$user->email}: ".$e->getMessage());
+                    // Send email
+                    try {
+                        Mail::to($user->email)->send(new HolidayNotificationMail($holiday, false));
+                    } catch (\Exception $e) {
+                        Log::error("Failed to send holiday email to {$user->email}: ".$e->getMessage());
+                    }
                 }
-            }
+            });
 
             // Mark as notified
             $holiday->update(['notified' => true]);

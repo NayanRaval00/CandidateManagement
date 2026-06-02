@@ -233,6 +233,11 @@ class AttendanceResource extends Resource
         return [];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('user');
+    }
+
     public static function getPages(): array
     {
         return [
