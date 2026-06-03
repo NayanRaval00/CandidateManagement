@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Candidate;
 use Illuminate\Http\Request;
 
@@ -15,7 +14,7 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(
+        $validated = $request->validate(
             [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:candidates,email',
@@ -33,26 +32,26 @@ class UserController extends Controller
                 'notice_period' => 'nullable|string|max:255',
             ],
             [
-                'email.unique' => 'You have already applied.'
+                'email.unique' => 'You have already applied.',
             ]
         );
 
-        $data = $request->except('resume');
+        $data = $validated;
+        unset($data['resume']);
 
         // Handle file upload
         if ($request->hasFile('resume')) {
             $file = $request->file('resume');
 
             // Optional: create unique file name
-            $filename = time() . '_' . $file->getClientOriginalName();
+            $filename = time().'_'.$file->getClientOriginalName();
 
             // Move file to public/resumes
             $file->move(public_path('resumes'), $filename);
 
             // Store relative path in database
-            $data['resume'] = 'resumes/' . $filename;
+            $data['resume'] = 'resumes/'.$filename;
         }
-
 
         Candidate::create($data);
 
