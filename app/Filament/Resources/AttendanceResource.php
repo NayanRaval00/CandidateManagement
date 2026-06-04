@@ -18,6 +18,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportBulkAction;
 use pxlrbt\FilamentExcel\Columns\Column;
 use pxlrbt\FilamentExcel\Exports\ExcelExport;
@@ -120,14 +121,13 @@ class AttendanceResource extends Resource
                     ->dateTime('h:i A')
                     ->label('Punch Out')
                     ->sortable(),
-                TextColumn::make('punch_in_latitude')
-                    ->label('Punch In Location')
-                    ->state(fn ($record) => $record->punch_in_latitude ? "{$record->punch_in_latitude}, {$record->punch_in_longitude}" : 'N/A')
-                    ->description(fn ($record) => $record->punch_in_location),
-                TextColumn::make('punch_out_latitude')
-                    ->label('Punch Out Location')
-                    ->state(fn ($record) => $record->punch_out_latitude ? "{$record->punch_out_latitude}, {$record->punch_out_longitude}" : 'N/A')
-                    ->description(fn ($record) => $record->punch_out_location),
+                TextColumn::make('hours_worked')
+                    ->label('Hours Worked')
+                    ->state(fn ($record) => $record->formatted_hours_worked),
+                TextColumn::make('punch_in_location')
+                    ->label('Punch In Location'),
+                TextColumn::make('punch_out_location')
+                    ->label('Punch Out Location'),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn ($state) => match ($state) {
@@ -192,6 +192,7 @@ class AttendanceResource extends Resource
                                     Column::make('date')->heading('Date'),
                                     Column::make('punch_in')->heading('Punch In Time'),
                                     Column::make('punch_out')->heading('Punch Out Time'),
+                                    Column::make('formatted_hours_worked')->heading('Hours Worked'),
                                     Column::make('punch_in_latitude')->heading('Punch In Latitude'),
                                     Column::make('punch_in_longitude')->heading('Punch In Longitude'),
                                     Column::make('punch_in_location')->heading('Punch In Location'),
@@ -205,7 +206,7 @@ class AttendanceResource extends Resource
                 ]),
             ])
             ->headerActions([
-                ExportBulkAction::make()
+                ExportAction::make()
                     ->label('Export All Filtered')
                     ->exports([
                         ExcelExport::make()
@@ -215,6 +216,7 @@ class AttendanceResource extends Resource
                                 Column::make('date')->heading('Date'),
                                 Column::make('punch_in')->heading('Punch In Time'),
                                 Column::make('punch_out')->heading('Punch Out Time'),
+                                Column::make('formatted_hours_worked')->heading('Hours Worked'),
                                 Column::make('punch_in_latitude')->heading('Punch In Latitude'),
                                 Column::make('punch_in_longitude')->heading('Punch In Longitude'),
                                 Column::make('punch_in_location')->heading('Punch In Location'),

@@ -42,6 +42,52 @@ class Attendance extends Model
     }
 
     /**
+     * Get the number of minutes worked on the particular day of this attendance record.
+     */
+    public function getMinutesWorkedOnDay(): int
+    {
+        if (! $this->punch_in) {
+            return 0;
+        }
+
+        $dateInstance = $this->date ?? $this->punch_in;
+        $startLimit = $dateInstance->copy()->startOfDay();
+        $endLimit = $dateInstance->copy()->addDay()->startOfDay();
+
+        $start = $this->punch_in->greaterThan($startLimit) ? $this->punch_in : $startLimit;
+        $actualEnd = $this->punch_out ?? now();
+        $end = $actualEnd->lessThan($endLimit) ? $actualEnd : $endLimit;
+
+        if ($start->greaterThanOrEqualTo($end)) {
+            return 0;
+        }
+
+        return (int) $start->diffInMinutes($end);
+    }
+
+    /**
+     * Get the number of hours worked.
+     */
+    public function getHoursWorkedAttribute(): float
+    {
+        $minutes = $this->getMinutesWorkedOnDay();
+
+        return round($minutes / 60, 2);
+    }
+
+    /**
+     * Get the formatted hours worked (e.g. 8h 30m).
+     */
+    public function getFormattedHoursWorkedAttribute(): string
+    {
+        $totalMinutes = $this->getMinutesWorkedOnDay();
+        $hours = floor($totalMinutes / 60);
+        $minutes = $totalMinutes % 60;
+
+        return "{$hours}h {$minutes}m";
+    }
+
+    /**
      * Calculate the distance in meters between two coordinates using the Haversine formula.
      */
     public static function calculateDistance(float $lat1, float $lon1, float $lat2, float $lon2): float

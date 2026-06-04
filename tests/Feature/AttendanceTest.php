@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\MyAttendance;
+use App\Filament\Widgets\AttendanceWidget;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -203,5 +205,100 @@ class AttendanceTest extends TestCase
             'date' => today()->toDateString().' 00:00:00',
             'punch_in_location' => 'Test Location Name, Ahmedabad, Gujarat',
         ]);
+    }
+
+    /** @test */
+    public function widget_employee_can_punch_in_when_within_radius(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee 2',
+            'email' => 'employee2@example.com',
+            'password' => bcrypt('password'),
+        ]);
+        $employee->assignRole('employee');
+
+        $setting = AttendanceSetting::getSingleton();
+        $setting->update([
+            'latitude' => 23.02250000,
+            'longitude' => 72.57140000,
+            'radius' => 100,
+            'min_punch_out_delay' => 30,
+        ]);
+
+        $this->actingAs($employee);
+
+        Livewire::test(AttendanceWidget::class)
+            ->set('latitude', 23.02260000)
+            ->set('longitude', 72.57150000)
+            ->call('punchIn');
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => today()->toDateString().' 00:00:00',
+            'status' => 'Present',
+        ]);
+    }
+
+    /** @test */
+    public function widget_employee_cannot_punch_out_before_lockout_delay(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee 3',
+            'email' => 'employee3@example.com',
+            'password' => bcrypt('password'),
+        ]);
+        $employee->assignRole('employee');
+
+        $setting = AttendanceSetting::getSingleton();
+        $setting->update([
+            'latitude' => 23.02250000,
+            'longitude' => 72.57140000,
+            'radius' => 100,
+            'min_punch_out_delay' => 30,
+        ]);
+
+        $this->actingAs($employee);
+
+        $attendance = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => today(),
+            'punch_in' => now(),
+            'punch_in_latitude' => 23.02250000,
+            'punch_in_longitude' => 72.57140000,
+            'status' => 'Present',
+        ]);
+
+        Livewire::test(AttendanceWidget::class)
+            ->set('latitude', 23.02250000)
+            ->set('longitude', 72.57140000)
+            ->call('punchOut');
+
+        $this->assertNull($attendance->fresh()->punch_out);
+    }
+
+    /** @test */
+    public function employee_work_hours_are_bounded_by_calendar_day(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee',
+            'email' => 'employee@example.com',
+            'password' => bcrypt('password'),
+        ]);
+
+        $date = Carbon::parse('2026-06-04');
+        $punchIn = Carbon::parse('2026-06-04 22:00:00');
+        $punchOut = Carbon::parse('2026-06-05 06:00:00');
+
+        $attendance = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => $date,
+            'punch_in' => $punchIn,
+            'punch_out' => $punchOut,
+            'status' => 'Present',
+        ]);
+
+        // Worked hours on 2026-06-04 should be capped from 22:00:00 to 24:00:00 (2.0 hours)
+        $this->assertEquals(2.0, $attendance->hours_worked);
+        $this->assertEquals('2h 0m', $attendance->formatted_hours_worked);
     }
 }
