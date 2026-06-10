@@ -92,7 +92,7 @@ class MyAttendance extends Page implements HasTable
                 return $response->json('display_name');
             }
         } catch (\Exception $e) {
-            Log::warning('Reverse geocoding failed: '.$e->getMessage());
+            Log::warning('Reverse geocoding failed: ' . $e->getMessage());
         }
 
         return null;
@@ -255,16 +255,16 @@ class MyAttendance extends Page implements HasTable
         $punchInTime = Carbon::parse($this->todayRecord->punch_in);
         $diffInMinutes = now()->diffInMinutes($punchInTime);
 
-        if ($diffInMinutes < $setting->min_punch_out_delay) {
-            $remaining = $setting->min_punch_out_delay - $diffInMinutes;
-            Notification::make()
-                ->title('Punch Out Locked')
-                ->body("You cannot punch out until {$setting->min_punch_out_delay} minutes after your punch in. Please wait {$remaining} more minutes.")
-                ->danger()
-                ->send();
+        // if ($diffInMinutes < $setting->min_punch_out_delay) {
+        //     $remaining = $setting->min_punch_out_delay - $diffInMinutes;
+        //     Notification::make()
+        //         ->title('Punch Out Locked')
+        //         ->body("You cannot punch out until {$setting->min_punch_out_delay} minutes after your punch in. Please wait {$remaining} more minutes.")
+        //         ->danger()
+        //         ->send();
 
-            return;
-        }
+        //     return;
+        // }
 
         // Get location name
         $locationName = $this->resolveLocationName($this->latitude, $this->longitude);
@@ -302,14 +302,14 @@ class MyAttendance extends Page implements HasTable
                     ->label('Punch Out'),
                 TextColumn::make('hours_worked')
                     ->label('Hours Worked')
-                    ->state(fn ($record) => $record->formatted_hours_worked),
+                    ->state(fn($record) => $record->formatted_hours_worked),
                 TextColumn::make('punch_in_location')
                     ->label('Punch In Location'),
                 TextColumn::make('punch_out_location')
                     ->label('Punch Out Location'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'Present' => 'success',
                         'Late' => 'warning',
                         'Half Day' => 'info',
@@ -327,11 +327,11 @@ class MyAttendance extends Page implements HasTable
                         return $query
                             ->when(
                                 $data['date_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('date', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('date', '>=', $date),
                             )
                             ->when(
                                 $data['date_to'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('date', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('date', '<=', $date),
                             );
                     }),
             ])

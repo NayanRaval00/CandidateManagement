@@ -291,4 +291,59 @@ class TimesheetWorkflowTest extends TestCase
         // Assert batch status changed to dispatched
         $this->assertEquals('dispatched', $batch->fresh()->status);
     }
+
+    /** @test */
+    public function admin_can_delete_timesheet_batch(): void
+    {
+        $this->actingAs($this->admin);
+
+        $batch1 = TimesheetBatch::create([
+            'start_date' => Carbon::parse('2026-06-01'),
+            'end_date' => Carbon::parse('2026-06-05'),
+            'status' => 'draft',
+            'generated_by' => $this->admin->id,
+        ]);
+
+        $batch2 = TimesheetBatch::create([
+            'start_date' => Carbon::parse('2026-06-08'),
+            'end_date' => Carbon::parse('2026-06-12'),
+            'status' => 'draft',
+            'generated_by' => $this->admin->id,
+        ]);
+
+        $record = TimesheetRecord::create([
+            'batch_id' => $batch2->id,
+            'user_id' => $this->employee->id,
+            'total_calendar_days' => 5,
+            'expected_working_days' => 5,
+            'days_worked' => 5,
+            'leaves_count' => 0,
+            'holidays_count' => 0,
+            'late_count' => 0,
+            'total_hours' => 40.0,
+            'formatted_hours' => '40h 0m',
+            'daily_breakdown_json' => ['2026-06-08' => 'Present'],
+            'late_logs_json' => [],
+        ]);
+
+        $this->assertDatabaseHas('timesheet_batches', ['id' => $batch2->id]);
+        $this->assertDatabaseHas('timesheet_records', ['id' => $record->id]);
+
+        // Delete active batch2, activeBatchId should switch to batch1
+        Livewire::test(TimesheetWorkflow::class)
+            ->set('activeBatchId', $batch2->id)
+            ->call('deleteBatch', $batch2->id)
+            ->assertSet('activeBatchId', $batch1->id);
+
+        $this->assertDatabaseMissing('timesheet_batches', ['id' => $batch2->id]);
+        $this->assertDatabaseMissing('timesheet_records', ['id' => $record->id]);
+
+        // Delete batch1 (last batch), activeBatchId should switch to null
+        Livewire::test(TimesheetWorkflow::class)
+            ->set('activeBatchId', $batch1->id)
+            ->call('deleteBatch', $batch1->id)
+            ->assertSet('activeBatchId', null);
+
+        $this->assertDatabaseMissing('timesheet_batches', ['id' => $batch1->id]);
+    }
 }

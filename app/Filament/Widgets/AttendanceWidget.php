@@ -57,7 +57,7 @@ class AttendanceWidget extends Widget
                 return $response->json('display_name');
             }
         } catch (\Exception $e) {
-            Log::warning('Reverse geocoding failed: '.$e->getMessage());
+            Log::warning('Reverse geocoding failed: ' . $e->getMessage());
         }
 
         return null;
@@ -216,16 +216,16 @@ class AttendanceWidget extends Widget
         $punchInTime = Carbon::parse($this->todayRecord->punch_in);
         $diffInMinutes = now()->diffInMinutes($punchInTime);
 
-        if ($diffInMinutes < $setting->min_punch_out_delay) {
-            $remaining = $setting->min_punch_out_delay - $diffInMinutes;
-            Notification::make()
-                ->title('Punch Out Locked')
-                ->body("You cannot punch out until {$setting->min_punch_out_delay} minutes after your punch in. Please wait {$remaining} more minutes.")
-                ->danger()
-                ->send();
+        // if ($diffInMinutes < $setting->min_punch_out_delay) {
+        //     $remaining = $setting->min_punch_out_delay - $diffInMinutes;
+        //     Notification::make()
+        //         ->title('Punch Out Locked')
+        //         ->body("You cannot punch out until {$setting->min_punch_out_delay} minutes after your punch in. Please wait {$remaining} more minutes.")
+        //         ->danger()
+        //         ->send();
 
-            return;
-        }
+        //     return;
+        // }
 
         $locationName = $this->resolveLocationName($this->latitude, $this->longitude);
 

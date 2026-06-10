@@ -32,23 +32,36 @@
 
                 <div class="space-y-3 max-h-[400px] overflow-y-auto custom-modal-scrollbar">
                     @forelse($this->batches as $b)
-                    <button wire:click="selectBatch({{ $b->id }})"
-                        class="w-full text-left p-3 rounded-xl border transition {{ $this->activeBatchId === $b->id ? 'bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800/40' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5' }}">
+                    <div wire:click="selectBatch({{ $b->id }})"
+                        role="button"
+                        class="w-full text-left p-3 rounded-xl border-y border-r border-l-4 transition duration-200 cursor-pointer relative {{ $this->activeBatchId === $b->id ? 'bg-indigo-100/80 dark:bg-indigo-950/60 border-y-indigo-300 border-r-indigo-300 border-l-indigo-600 dark:border-y-indigo-800/80 dark:border-r-indigo-800/80 dark:border-l-indigo-500 shadow-sm' : 'bg-white dark:bg-gray-900 border-y-gray-200 border-r-gray-200 border-l-transparent dark:border-y-gray-800 dark:border-r-gray-800 hover:bg-gray-50 dark:hover:bg-white/5' }}">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="font-bold text-xs text-gray-400">#{{ $b->id }}</span>
-                            <x-filament::badge
-                                color="{{ $b->status === 'draft' ? 'warning' : ($b->status === 'approved' ? 'success' : 'info') }}"
-                                size="sm">
-                                {{ ucfirst($b->status) }}
-                            </x-filament::badge>
+                            <span class="font-bold text-xs {{ $this->activeBatchId === $b->id ? 'text-indigo-700 dark:text-indigo-400 font-extrabold' : 'text-gray-400' }}">#{{ $b->id }}</span>
+                            <div class="flex items-center gap-2">
+                                <x-filament::badge
+                                    color="{{ $b->status === 'draft' ? 'warning' : ($b->status === 'approved' ? 'success' : 'info') }}"
+                                    size="sm">
+                                    {{ ucfirst($b->status) }}
+                                </x-filament::badge>
+
+                                <button type="button"
+                                    wire:click.stop="deleteBatch({{ $b->id }})"
+                                    wire:confirm="Are you sure you want to delete this batch? All associated employee records will be permanently deleted."
+                                    class="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850"
+                                    title="Delete Batch">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
-                        <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        <div class="text-sm font-semibold {{ $this->activeBatchId === $b->id ? 'text-indigo-900 dark:text-indigo-200' : 'text-gray-800 dark:text-gray-200' }}">
                             {{ $b->start_date->format('M d') }} - {{ $b->end_date->format('M d, Y') }}
                         </div>
-                        <div class="text-[10px] text-gray-500 mt-1">
+                        <div class="text-[10px] {{ $this->activeBatchId === $b->id ? 'text-indigo-700/80 dark:text-indigo-300/80 font-medium' : 'text-gray-500' }} mt-1">
                             By {{ $b->generatedBy->name }}
                         </div>
-                    </button>
+                    </div>
                     @empty
                     <div class="text-center py-6 text-gray-500 text-sm">
                         No batches generated yet.

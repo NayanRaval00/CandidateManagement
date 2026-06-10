@@ -414,6 +414,26 @@ class TimesheetWorkflow extends Page
     }
 
     /**
+     * Delete a timesheet batch and its records.
+     */
+    public function deleteBatch(int $batchId): void
+    {
+        $batch = TimesheetBatch::findOrFail($batchId);
+        $batch->delete();
+
+        Notification::make()
+            ->title('Batch Deleted')
+            ->body('The timesheet batch has been deleted successfully.')
+            ->success()
+            ->send();
+
+        if ($this->activeBatchId === $batchId) {
+            $latestBatch = TimesheetBatch::latest()->first();
+            $this->activeBatchId = $latestBatch ? $latestBatch->id : null;
+        }
+    }
+
+    /**
      * Dispatch sending job to the queue.
      */
     public function sendBatch(int $batchId): void
