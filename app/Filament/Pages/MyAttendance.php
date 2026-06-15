@@ -250,21 +250,6 @@ class MyAttendance extends Page implements HasTable
             return;
         }
 
-        // Validate Lockout Duration
-        $setting = AttendanceSetting::getSingleton();
-        $punchInTime = Carbon::parse($this->todayRecord->punch_in);
-        $diffInMinutes = now()->diffInMinutes($punchInTime);
-
-        // if ($diffInMinutes < $setting->min_punch_out_delay) {
-        //     $remaining = $setting->min_punch_out_delay - $diffInMinutes;
-        //     Notification::make()
-        //         ->title('Punch Out Locked')
-        //         ->body("You cannot punch out until {$setting->min_punch_out_delay} minutes after your punch in. Please wait {$remaining} more minutes.")
-        //         ->danger()
-        //         ->send();
-
-        //     return;
-        // }
 
         // Get location name
         $locationName = $this->resolveLocationName($this->latitude, $this->longitude);

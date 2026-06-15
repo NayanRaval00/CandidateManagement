@@ -10,8 +10,8 @@ use App\Models\LeaveRequest;
 use App\Models\TimesheetBatch;
 use App\Models\TimesheetRecord;
 use App\Models\User;
+use App\Services\Timesheet\TimesheetCalculatorInterface;
 use Carbon\Carbon;
-use Carbon\CarbonPeriod;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
@@ -151,119 +151,56 @@ class TimesheetWorkflow extends Page
         $holidays = Holiday::whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])->get();
         $holidayDates = $holidays->where('is_working_day', false)->pluck('date')->map(fn ($d) => $d->format('Y-m-d'))->toArray();
 
+        $userIds = $users->pluck('id')->toArray();
+
+        // Optimized batch queries to solve N+1 performance issue
+        $allLeaveRequests = LeaveRequest::whereIn('user_id', $userIds)
+            ->where('status', 'approved')
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('start_date', [$start, $end])
+                    ->orWhereBetween('end_date', [$start, $end])
+                    ->orWhere(function ($sub) use ($start, $end) {
+                        $sub->where('start_date', '<=', $start)
+                            ->where('end_date', '>=', $end);
+                    });
+            })->get()->groupBy('user_id');
+
+        $allManualLeaves = Leave::whereIn('user_id', $userIds)
+            ->where('status', 'approved')
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('start_date', [$start, $end])
+                    ->orWhereBetween('end_date', [$start, $end])
+                    ->orWhere(function ($sub) use ($start, $end) {
+                        $sub->where('start_date', '<=', $start)
+                            ->where('end_date', '>=', $end);
+                    });
+            })->get()->groupBy('user_id');
+
+        $allAttendances = Attendance::whereIn('user_id', $userIds)
+            ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+            ->get()->groupBy('user_id');
+
+        $calculator = app(TimesheetCalculatorInterface::class);
+
         foreach ($users as $user) {
-            // Fetch leaves and manual leaves
-            $leaveRequests = LeaveRequest::where('user_id', $user->id)
-                ->where('status', 'approved')
-                ->where(function ($q) use ($start, $end) {
-                    $q->whereBetween('start_date', [$start, $end])
-                        ->orWhereBetween('end_date', [$start, $end])
-                        ->orWhere(function ($sub) use ($start, $end) {
-                            $sub->where('start_date', '<=', $start)
-                                ->where('end_date', '>=', $end);
-                        });
-                })->get();
+            $userLeaveRequests = $allLeaveRequests->get($user->id, collect());
+            $userManualLeaves = $allManualLeaves->get($user->id, collect());
+            $userAttendances = $allAttendances->get($user->id, collect());
 
-            $manualLeaves = Leave::where('user_id', $user->id)
-                ->where('status', 'approved')
-                ->where(function ($q) use ($start, $end) {
-                    $q->whereBetween('start_date', [$start, $end])
-                        ->orWhereBetween('end_date', [$start, $end])
-                        ->orWhere(function ($sub) use ($start, $end) {
-                            $sub->where('start_date', '<=', $start)
-                                ->where('end_date', '>=', $end);
-                        });
-                })->get();
+            $metrics = $calculator->calculate(
+                $user,
+                $start,
+                $end,
+                $userAttendances,
+                $userLeaveRequests,
+                $userManualLeaves,
+                $holidayDates
+            );
 
-            // Fetch attendances in range
-            $attendances = Attendance::where('user_id', $user->id)
-                ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                ->get();
-
-            // Daily breakdown & counters
-            $dailyBreakdown = [];
-            $daysWorked = 0;
-            $leavesCount = 0;
-            $holidaysCount = 0;
-            $expectedWorkingDays = 0;
-            $totalMinutes = 0;
-            $lateCount = 0;
-            $lateLogs = [];
-
-            $period = CarbonPeriod::create($start, $end);
-            foreach ($period as $date) {
-                $dateStr = $date->format('Y-m-d');
-                $isWeekend = $date->isWeekend();
-                $isHoliday = in_array($dateStr, $holidayDates);
-
-                // Is expected working day? Weekday AND not a holiday
-                if (! $isWeekend && ! $isHoliday) {
-                    $expectedWorkingDays++;
-                }
-
-                // Check attendance
-                $att = $attendances->first(fn ($a) => ($a->date?->format('Y-m-d') === $dateStr) || ($a->punch_in?->format('Y-m-d') === $dateStr));
-
-                if ($att && $att->punch_in) {
-                    $dailyBreakdown[$dateStr] = 'Present';
-                    $daysWorked++;
-                    $totalMinutes += $att->getMinutesWorkedOnDay();
-
-                    // Check late arrival (grace period past 09:45:00)
-                    $punchTime = $att->punch_in->format('H:i:s');
-                    if ($punchTime > '09:45:00') {
-                        $lateCount++;
-                        $lateLogs[] = $att->punch_in->toDateTimeString();
-                    }
-                } else {
-                    // Check leaves
-                    $hasLeave = false;
-                    foreach ($leaveRequests as $lr) {
-                        if ($date->between($lr->start_date, $lr->end_date)) {
-                            $hasLeave = true;
-                            break;
-                        }
-                    }
-                    if (! $hasLeave) {
-                        foreach ($manualLeaves as $ml) {
-                            if ($date->between($ml->start_date, $ml->end_date)) {
-                                $hasLeave = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if ($hasLeave) {
-                        $dailyBreakdown[$dateStr] = 'Leave';
-                        $leavesCount++;
-                    } elseif ($isHoliday || $isWeekend) {
-                        $dailyBreakdown[$dateStr] = 'Holiday';
-                        $holidaysCount++;
-                    } else {
-                        $dailyBreakdown[$dateStr] = 'Absent';
-                    }
-                }
-            }
-
-            $hours = floor($totalMinutes / 60);
-            $mins = $totalMinutes % 60;
-            $formattedHours = "{$hours}h {$mins}m";
-            $totalHoursDecimal = round($totalMinutes / 60, 2);
-
-            TimesheetRecord::create([
+            TimesheetRecord::create(array_merge([
                 'batch_id' => $batch->id,
                 'user_id' => $user->id,
-                'total_calendar_days' => $period->count(),
-                'expected_working_days' => $expectedWorkingDays,
-                'days_worked' => $daysWorked,
-                'leaves_count' => $leavesCount,
-                'holidays_count' => $holidaysCount,
-                'late_count' => $lateCount,
-                'total_hours' => $totalHoursDecimal,
-                'formatted_hours' => $formattedHours,
-                'daily_breakdown_json' => $dailyBreakdown,
-                'late_logs_json' => $lateLogs,
-            ]);
+            ], $metrics));
         }
 
         Notification::make()
@@ -314,83 +251,19 @@ class TimesheetWorkflow extends Page
             ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->get();
 
-        $dailyBreakdown = [];
-        $daysWorked = 0;
-        $leavesCount = 0;
-        $holidaysCount = 0;
-        $expectedWorkingDays = 0;
-        $totalMinutes = 0;
-        $lateCount = 0;
-        $lateLogs = [];
+        $calculator = app(TimesheetCalculatorInterface::class);
 
-        $period = CarbonPeriod::create($start, $end);
-        foreach ($period as $date) {
-            $dateStr = $date->format('Y-m-d');
-            $isWeekend = $date->isWeekend();
-            $isHoliday = in_array($dateStr, $holidayDates);
+        $metrics = $calculator->calculate(
+            $user,
+            $start,
+            $end,
+            $attendances,
+            $leaveRequests,
+            $manualLeaves,
+            $holidayDates
+        );
 
-            if (! $isWeekend && ! $isHoliday) {
-                $expectedWorkingDays++;
-            }
-
-            $att = $attendances->first(fn ($a) => ($a->date?->format('Y-m-d') === $dateStr) || ($a->punch_in?->format('Y-m-d') === $dateStr));
-
-            if ($att && $att->punch_in) {
-                $dailyBreakdown[$dateStr] = 'Present';
-                $daysWorked++;
-                $totalMinutes += $att->getMinutesWorkedOnDay();
-
-                $punchTime = $att->punch_in->format('H:i:s');
-                if ($punchTime > '09:45:00') {
-                    $lateCount++;
-                    $lateLogs[] = $att->punch_in->toDateTimeString();
-                }
-            } else {
-                $hasLeave = false;
-                foreach ($leaveRequests as $lr) {
-                    if ($date->between($lr->start_date, $lr->end_date)) {
-                        $hasLeave = true;
-                        break;
-                    }
-                }
-                if (! $hasLeave) {
-                    foreach ($manualLeaves as $ml) {
-                        if ($date->between($ml->start_date, $ml->end_date)) {
-                            $hasLeave = true;
-                            break;
-                        }
-                    }
-                }
-
-                if ($hasLeave) {
-                    $dailyBreakdown[$dateStr] = 'Leave';
-                    $leavesCount++;
-                } elseif ($isHoliday || $isWeekend) {
-                    $dailyBreakdown[$dateStr] = 'Holiday';
-                    $holidaysCount++;
-                } else {
-                    $dailyBreakdown[$dateStr] = 'Absent';
-                }
-            }
-        }
-
-        $hours = floor($totalMinutes / 60);
-        $mins = $totalMinutes % 60;
-        $formattedHours = "{$hours}h {$mins}m";
-        $totalHoursDecimal = round($totalMinutes / 60, 2);
-
-        $record->update([
-            'total_calendar_days' => $period->count(),
-            'expected_working_days' => $expectedWorkingDays,
-            'days_worked' => $daysWorked,
-            'leaves_count' => $leavesCount,
-            'holidays_count' => $holidaysCount,
-            'late_count' => $lateCount,
-            'total_hours' => $totalHoursDecimal,
-            'formatted_hours' => $formattedHours,
-            'daily_breakdown_json' => $dailyBreakdown,
-            'late_logs_json' => $lateLogs,
-        ]);
+        $record->update($metrics);
     }
 
     /**
