@@ -52,9 +52,10 @@ class UserResource extends Resource
                                     ->maxLength(20),
                                 Select::make('roles')
                                     ->relationship('roles', 'name')
+                                    ->multiple()
                                     ->preload()
                                     ->required()
-                                    ->label('Role'),
+                                    ->label('Roles'),
                                 Select::make('status')
                                     ->options([
                                         'Active' => 'Active',
