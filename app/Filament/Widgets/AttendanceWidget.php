@@ -26,6 +26,8 @@ class AttendanceWidget extends Widget
 
     public ?Attendance $todayRecord = null;
 
+    public ?string $breakReason = 'Short Break';
+
     public function mount(): void
     {
         $this->refreshTodayRecord();
@@ -35,6 +37,7 @@ class AttendanceWidget extends Widget
     {
         $this->todayRecord = Attendance::where('user_id', auth()->id())
             ->whereDate('date', today())
+            ->with('breaks')
             ->first();
     }
 
@@ -57,7 +60,7 @@ class AttendanceWidget extends Widget
                 return $response->json('display_name');
             }
         } catch (\Exception $e) {
-            Log::warning('Reverse geocoding failed: ' . $e->getMessage());
+            Log::warning('Reverse geocoding failed: '.$e->getMessage());
         }
 
         return null;
@@ -211,6 +214,28 @@ class AttendanceWidget extends Widget
             return;
         }
 
+        // Lockout delay validation
+        $setting = AttendanceSetting::getSingleton();
+        if ($this->todayRecord->punch_in->addMinutes($setting->min_punch_out_delay)->isFuture()) {
+            $remaining = now()->diffInMinutes($this->todayRecord->punch_in->addMinutes($setting->min_punch_out_delay)) + 1;
+            Notification::make()
+                ->title('Punch Out Restricted')
+                ->body("You cannot punch out so quickly. Please wait another {$remaining} minutes.")
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        // Auto-end active break
+        if ($this->todayRecord->is_on_break) {
+            $currentBreak = $this->todayRecord->current_break;
+            if ($currentBreak) {
+                $currentBreak->update([
+                    'end_time' => now(),
+                ]);
+            }
+        }
 
         $locationName = $this->resolveLocationName($this->latitude, $this->longitude);
 
@@ -224,6 +249,83 @@ class AttendanceWidget extends Widget
         Notification::make()
             ->title('Punched Out Successfully')
             ->body('Thank you! Work duration recorded.')
+            ->success()
+            ->send();
+
+        $this->refreshTodayRecord();
+    }
+
+    /**
+     * Start a break for the current attendance session.
+     */
+    public function startBreak(?string $reason = null): void
+    {
+        $this->refreshTodayRecord();
+
+        if (! $this->todayRecord || ! $this->todayRecord->punch_in || $this->todayRecord->punch_out) {
+            Notification::make()
+                ->title('Error')
+                ->body('You must be punched in and working to start a break.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if ($this->todayRecord->is_on_break) {
+            Notification::make()
+                ->title('Already on Break')
+                ->body('You are already on break.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $reason = $reason ?: ($this->breakReason ?: 'Short Break');
+
+        $this->todayRecord->breaks()->create([
+            'start_time' => now(),
+            'reason' => $reason,
+        ]);
+
+        Notification::make()
+            ->title('Break Started')
+            ->body('Working timer has been paused.')
+            ->info()
+            ->send();
+
+        $this->breakReason = 'Short Break';
+        $this->refreshTodayRecord();
+    }
+
+    /**
+     * End the current active break.
+     */
+    public function endBreak(): void
+    {
+        $this->refreshTodayRecord();
+
+        if (! $this->todayRecord || ! $this->todayRecord->is_on_break) {
+            Notification::make()
+                ->title('Error')
+                ->body('You are not currently on a break.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $currentBreak = $this->todayRecord->current_break;
+        if ($currentBreak) {
+            $currentBreak->update([
+                'end_time' => now(),
+            ]);
+        }
+
+        Notification::make()
+            ->title('Break Ended')
+            ->body('Working timer has resumed.')
             ->success()
             ->send();
 

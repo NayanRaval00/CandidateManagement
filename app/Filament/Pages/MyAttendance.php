@@ -39,6 +39,8 @@ class MyAttendance extends Page implements HasTable
 
     public ?Attendance $todayRecord = null;
 
+    public ?string $breakReason = 'Short Break';
+
     public static function shouldRegisterNavigation(): bool
     {
         return true;
@@ -53,6 +55,7 @@ class MyAttendance extends Page implements HasTable
     {
         $this->todayRecord = Attendance::where('user_id', auth()->id())
             ->whereDate('date', today())
+            ->with('breaks')
             ->first();
     }
 
@@ -92,7 +95,7 @@ class MyAttendance extends Page implements HasTable
                 return $response->json('display_name');
             }
         } catch (\Exception $e) {
-            Log::warning('Reverse geocoding failed: ' . $e->getMessage());
+            Log::warning('Reverse geocoding failed: '.$e->getMessage());
         }
 
         return null;
@@ -250,6 +253,28 @@ class MyAttendance extends Page implements HasTable
             return;
         }
 
+        // Lockout delay validation
+        $setting = AttendanceSetting::getSingleton();
+        if ($this->todayRecord->punch_in->addMinutes($setting->min_punch_out_delay)->isFuture()) {
+            $remaining = now()->diffInMinutes($this->todayRecord->punch_in->addMinutes($setting->min_punch_out_delay)) + 1;
+            Notification::make()
+                ->title('Punch Out Restricted')
+                ->body("You cannot punch out so quickly. Please wait another {$remaining} minutes.")
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        // Auto-end active break
+        if ($this->todayRecord->is_on_break) {
+            $currentBreak = $this->todayRecord->current_break;
+            if ($currentBreak) {
+                $currentBreak->update([
+                    'end_time' => now(),
+                ]);
+            }
+        }
 
         // Get location name
         $locationName = $this->resolveLocationName($this->latitude, $this->longitude);
@@ -271,10 +296,87 @@ class MyAttendance extends Page implements HasTable
         $this->refreshTodayRecord();
     }
 
+    /**
+     * Start a break for the current attendance session.
+     */
+    public function startBreak(?string $reason = null): void
+    {
+        $this->refreshTodayRecord();
+
+        if (! $this->todayRecord || ! $this->todayRecord->punch_in || $this->todayRecord->punch_out) {
+            Notification::make()
+                ->title('Error')
+                ->body('You must be punched in and working to start a break.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if ($this->todayRecord->is_on_break) {
+            Notification::make()
+                ->title('Already on Break')
+                ->body('You are already on break.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $reason = $reason ?: ($this->breakReason ?: 'Short Break');
+
+        $this->todayRecord->breaks()->create([
+            'start_time' => now(),
+            'reason' => $reason,
+        ]);
+
+        Notification::make()
+            ->title('Break Started')
+            ->body('Working timer has been paused.')
+            ->info()
+            ->send();
+
+        $this->breakReason = 'Short Break';
+        $this->refreshTodayRecord();
+    }
+
+    /**
+     * End the current active break.
+     */
+    public function endBreak(): void
+    {
+        $this->refreshTodayRecord();
+
+        if (! $this->todayRecord || ! $this->todayRecord->is_on_break) {
+            Notification::make()
+                ->title('Error')
+                ->body('You are not currently on a break.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $currentBreak = $this->todayRecord->current_break;
+        if ($currentBreak) {
+            $currentBreak->update([
+                'end_time' => now(),
+            ]);
+        }
+
+        Notification::make()
+            ->title('Break Ended')
+            ->body('Working timer has resumed.')
+            ->success()
+            ->send();
+
+        $this->refreshTodayRecord();
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(Attendance::query()->where('user_id', auth()->id()))
+            ->query(Attendance::query()->where('user_id', auth()->id())->with('breaks'))
             ->columns([
                 TextColumn::make('date')
                     ->date()
@@ -285,16 +387,19 @@ class MyAttendance extends Page implements HasTable
                 TextColumn::make('punch_out')
                     ->dateTime('h:i A')
                     ->label('Punch Out'),
+                TextColumn::make('breaks_count')
+                    ->label('Breaks')
+                    ->state(fn ($record) => $record->breaks->isEmpty() ? '-' : $record->breaks->count().' ('.$record->formatted_total_break_time.')'),
                 TextColumn::make('hours_worked')
                     ->label('Hours Worked')
-                    ->state(fn($record) => $record->formatted_hours_worked),
+                    ->state(fn ($record) => $record->formatted_hours_worked),
                 TextColumn::make('punch_in_location')
                     ->label('Punch In Location'),
                 TextColumn::make('punch_out_location')
                     ->label('Punch Out Location'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn($state) => match ($state) {
+                    ->color(fn ($state) => match ($state) {
                         'Present' => 'success',
                         'Late' => 'warning',
                         'Half Day' => 'info',
@@ -312,11 +417,11 @@ class MyAttendance extends Page implements HasTable
                         return $query
                             ->when(
                                 $data['date_from'],
-                                fn(Builder $query, $date): Builder => $query->whereDate('date', '>=', $date),
+                                fn (Builder $query, $date): Builder => $query->whereDate('date', '>=', $date),
                             )
                             ->when(
                                 $data['date_to'],
-                                fn(Builder $query, $date): Builder => $query->whereDate('date', '<=', $date),
+                                fn (Builder $query, $date): Builder => $query->whereDate('date', '<=', $date),
                             );
                     }),
             ])

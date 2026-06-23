@@ -23,3 +23,5 @@ Route::get('clear-route', function () {
 
 Route::get('save-details', [UserController::class, 'save']);
 Route::post('/users', [UserController::class, 'store'])->name('users.store');
+
+Route::get('test-route', fn () => view('test'));

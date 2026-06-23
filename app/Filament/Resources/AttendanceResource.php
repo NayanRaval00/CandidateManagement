@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -99,6 +100,30 @@ class AttendanceResource extends Resource
                                     ->label('Punch Out Location Name'),
                             ]),
                     ])->collapsed(),
+
+                Section::make('Breaks Log')
+                    ->schema([
+                        Repeater::make('breaks')
+                            ->relationship('breaks')
+                            ->schema([
+                                DateTimePicker::make('start_time')
+                                    ->disabled()
+                                    ->label('Start Time'),
+                                DateTimePicker::make('end_time')
+                                    ->disabled()
+                                    ->label('End Time'),
+                                TextInput::make('reason')
+                                    ->disabled()
+                                    ->label('Reason'),
+                            ])
+                            ->columns(3)
+                            ->addable(false)
+                            ->deletable(false)
+                            ->reorderable(false)
+                            ->label(''),
+                    ])
+                    ->collapsible()
+                    ->collapsed(fn($record) => $record?->breaks?->isEmpty() ?? true),
             ]);
     }
 
@@ -121,16 +146,19 @@ class AttendanceResource extends Resource
                     ->dateTime('h:i A')
                     ->label('Punch Out')
                     ->sortable(),
+                TextColumn::make('breaks_count')
+                    ->label('Breaks')
+                    ->state(fn($record) => $record->breaks->isEmpty() ? '-' : $record->breaks->count() . ' (' . $record->formatted_total_break_time . ')'),
                 TextColumn::make('hours_worked')
                     ->label('Hours Worked')
-                    ->state(fn ($record) => $record->formatted_hours_worked),
+                    ->state(fn($record) => $record->formatted_hours_worked),
                 TextColumn::make('punch_in_location')
                     ->label('Punch In Location'),
                 TextColumn::make('punch_out_location')
                     ->label('Punch Out Location'),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'Present' => 'success',
                         'Late' => 'warning',
                         'Half Day' => 'info',
@@ -151,7 +179,7 @@ class AttendanceResource extends Resource
                             ->label('Day-wise')
                             ->native(false),
                     ])
-                    ->query(fn (Builder $query, array $data) => $query->when($data['date_filter'], fn ($q) => $q->whereDate('date', $data['date_filter']))),
+                    ->query(fn(Builder $query, array $data) => $query->when($data['date_filter'], fn($q) => $q->whereDate('date', $data['date_filter']))),
                 SelectFilter::make('month')
                     ->options([
                         '01' => 'January',
@@ -168,11 +196,11 @@ class AttendanceResource extends Resource
                         '12' => 'December',
                     ])
                     ->label('Month')
-                    ->query(fn (Builder $query, array $data) => $query->when($data['value'], fn ($q) => $q->whereMonth('date', $data['value']))),
+                    ->query(fn(Builder $query, array $data) => $query->when($data['value'], fn($q) => $q->whereMonth('date', $data['value']))),
                 SelectFilter::make('year')
-                    ->options(fn () => array_combine(range(date('Y'), date('Y') - 5), range(date('Y'), date('Y') - 5)))
+                    ->options(fn() => array_combine(range(date('Y'), date('Y') - 5), range(date('Y'), date('Y') - 5)))
                     ->label('Year')
-                    ->query(fn (Builder $query, array $data) => $query->when($data['value'], fn ($q) => $q->whereYear('date', $data['value']))),
+                    ->query(fn(Builder $query, array $data) => $query->when($data['value'], fn($q) => $q->whereYear('date', $data['value']))),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -201,7 +229,7 @@ class AttendanceResource extends Resource
                                     Column::make('punch_out_location')->heading('Punch Out Location'),
                                     Column::make('status')->heading('Status'),
                                 ])
-                                ->withFilename('attendance_report_'.now()->format('Y_m_d_His')),
+                                ->withFilename('attendance_report_' . now()->format('Y_m_d_His')),
                         ]),
                 ]),
             ])
@@ -225,7 +253,7 @@ class AttendanceResource extends Resource
                                 Column::make('punch_out_location')->heading('Punch Out Location'),
                                 Column::make('status')->heading('Status'),
                             ])
-                            ->withFilename('attendance_report_'.now()->format('Y_m_d_His')),
+                            ->withFilename('attendance_report_' . now()->format('Y_m_d_His')),
                     ]),
             ]);
     }
@@ -237,7 +265,7 @@ class AttendanceResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('user');
+        return parent::getEloquentQuery()->with(['user', 'breaks']);
     }
 
     public static function getPages(): array

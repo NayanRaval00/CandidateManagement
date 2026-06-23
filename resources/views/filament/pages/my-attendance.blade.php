@@ -5,7 +5,6 @@
         gpsErrorMsg: '',
         latitude: null,
         longitude: null,
-        pageWire: null,
         
         init() {
             // Live clock
@@ -20,7 +19,6 @@
             setInterval(updateClock, 1000);
 
             // Initialize GPS
-            this.pageWire = $wire;
             this.refreshGPS();
         },
         refreshGPS() {
@@ -60,11 +58,9 @@
             this.gpsStatus = 'success';
             this.gpsErrorMsg = '';
 
-            if (this.pageWire) {
-                this.pageWire.set('latitude', lat);
-                this.pageWire.set('longitude', lng);
-                this.pageWire.set('locationError', null);
-            }
+            $wire.set('latitude', lat);
+            $wire.set('longitude', lng);
+            $wire.set('locationError', null);
         },
         errorCallback(error) {
             let msg = 'Failed to locate device.';
@@ -80,9 +76,7 @@
             this.gpsStatus = 'error';
             this.gpsErrorMsg = msg;
 
-            if (this.pageWire) {
-                this.pageWire.set('locationError', msg);
-            }
+            $wire.set('locationError', msg);
         },
         gpsAndAction(action) {
             const actionName = action === 'punchIn' ? 'Punch In' : 'Punch Out';
@@ -101,9 +95,7 @@
                 return;
             }
 
-            if (this.pageWire) {
-                this.pageWire.call(action, this.latitude, this.longitude);
-            }
+            $wire.call(action, this.latitude, this.longitude);
         }
     }" class="grid grid-cols-1 md:grid-cols-3 gap-6">
         
@@ -118,6 +110,8 @@
                     <span class="text-sm font-semibold uppercase tracking-wider text-gray-500">Punch Card Status</span>
                     @if(!$todayRecord)
                         <x-filament::badge color="gray" icon="heroicon-m-x-circle">Not Punched In</x-filament::badge>
+                    @elseif($todayRecord && $todayRecord->is_on_break)
+                        <x-filament::badge color="warning" icon="heroicon-m-pause" class="animate-pulse">On Break</x-filament::badge>
                     @elseif($todayRecord && !$todayRecord->punch_out)
                         <x-filament::badge color="success" icon="heroicon-m-play" class="animate-pulse">Working</x-filament::badge>
                     @else
@@ -133,7 +127,7 @@
 
                 <!-- Active Details -->
                 @if($todayRecord)
-                    <div class="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-gray-800 text-sm mb-6">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-gray-800 text-sm mb-6">
                         <div>
                             <span class="text-gray-500 dark:text-gray-400 block text-xs font-semibold">PUNCH IN</span>
                             <strong class="text-gray-900 dark:text-white font-bold text-base">{{ $todayRecord->punch_in->format('h:i A') }}</strong>
@@ -143,6 +137,14 @@
                             <strong class="text-gray-900 dark:text-white font-bold text-base">
                                 {{ $todayRecord->punch_out ? $todayRecord->punch_out->format('h:i A') : '--:--' }}
                             </strong>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400 block text-xs font-semibold">WORKED TIME</span>
+                            <strong class="text-indigo-600 dark:text-indigo-400 font-extrabold text-base">{{ $todayRecord->formatted_hours_worked }}</strong>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400 block text-xs font-semibold">BREAK TIME</span>
+                            <strong class="text-amber-600 dark:text-amber-400 font-extrabold text-base">{{ $todayRecord->formatted_total_break_time }}</strong>
                         </div>
                     </div>
                 @endif
@@ -175,15 +177,54 @@
                             </x-filament::button>
                         @endif
                     @elseif($todayRecord && !$todayRecord->punch_out)
-                        <x-filament::button 
-                            size="xl" 
-                            color="danger" 
-                            icon="heroicon-m-arrow-left-on-rectangle"
-                            @click="gpsAndAction('punchOut')"
-                            class="w-full text-base font-bold py-3"
-                        >
-                            Punch Out
-                        </x-filament::button>
+                        <div class="space-y-4">
+                            @if($todayRecord->is_on_break)
+                                <x-filament::button 
+                                    size="xl" 
+                                    color="success" 
+                                    icon="heroicon-m-play"
+                                    wire:click="endBreak"
+                                    class="w-full text-base font-bold py-3 animate-pulse"
+                                >
+                                    Resume Work
+                                </x-filament::button>
+                            @else
+                                <div class="flex gap-4">
+                                    <div class="w-1/2">
+                                        <select 
+                                            wire:model="breakReason"
+                                            class="w-full rounded-xl border-gray-300 dark:border-gray-700 dark:bg-gray-800 text-sm py-3"
+                                        >
+                                            <option value="Short Break">Short Break</option>
+                                            <option value="Lunch">Lunch</option>
+                                            <option value="Tea/Coffee Break">Tea/Coffee Break</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="w-1/2">
+                                        <x-filament::button 
+                                            size="xl" 
+                                            color="warning" 
+                                            icon="heroicon-m-pause"
+                                            wire:click="startBreak"
+                                            class="w-full text-base font-bold py-3"
+                                        >
+                                            Start Break
+                                        </x-filament::button>
+                                    </div>
+                                </div>
+                            @endif
+
+                            <x-filament::button 
+                                size="xl" 
+                                color="danger" 
+                                icon="heroicon-m-arrow-left-on-rectangle"
+                                @click="gpsAndAction('punchOut')"
+                                class="w-full text-base font-bold py-3"
+                            >
+                                Punch Out
+                            </x-filament::button>
+                        </div>
                     @else
                         <x-filament::button 
                             size="xl" 
@@ -195,6 +236,29 @@
                         </x-filament::button>
                     @endif
                 </div>
+
+                <!-- Today's Breaks Log -->
+                @if($todayRecord && $todayRecord->breaks->isNotEmpty())
+                    <div class="mt-6 border-t border-gray-200 dark:border-gray-800 pt-4">
+                        <span class="text-xs font-bold text-gray-500 dark:text-gray-400 block mb-3 uppercase tracking-wider">Today's Break Activity</span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[160px] overflow-y-auto pr-1">
+                            @foreach($todayRecord->breaks->sortBy('start_time') as $break)
+                                <div class="flex justify-between items-center bg-gray-50 dark:bg-white/5 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    <div>
+                                        <span class="font-bold text-sm text-gray-800 dark:text-gray-200 block">{{ $break->reason }}</span>
+                                        <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                            {{ $break->start_time->format('h:i A') }} - 
+                                            {{ $break->end_time ? $break->end_time->format('h:i A') : 'Active' }}
+                                        </span>
+                                    </div>
+                                    <x-filament::badge color="{{ $break->end_time ? 'gray' : 'warning' }}" size="sm">
+                                        {{ $break->duration_in_minutes }}m
+                                    </x-filament::badge>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </x-filament::section>
         </div>
 

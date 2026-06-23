@@ -301,4 +301,127 @@ class AttendanceTest extends TestCase
         $this->assertEquals(2.0, $attendance->hours_worked);
         $this->assertEquals('2h 0m', $attendance->formatted_hours_worked);
     }
+
+    /** @test */
+    public function employee_can_start_and_end_breaks(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee',
+            'email' => 'employee@example.com',
+            'password' => bcrypt('password'),
+        ]);
+        $employee->assignRole('employee');
+
+        $this->actingAs($employee);
+
+        // Create an attendance record punched in
+        $attendance = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => today(),
+            'punch_in' => now()->subHour(),
+            'status' => 'Present',
+        ]);
+
+        // Start break
+        Livewire::test(MyAttendance::class)
+            ->call('startBreak', 'Lunch');
+
+        $this->assertDatabaseHas('attendance_breaks', [
+            'attendance_id' => $attendance->id,
+            'reason' => 'Lunch',
+            'end_time' => null,
+        ]);
+
+        // End break
+        Livewire::test(MyAttendance::class)
+            ->call('endBreak');
+
+        $this->assertDatabaseMissing('attendance_breaks', [
+            'attendance_id' => $attendance->id,
+            'end_time' => null,
+        ]);
+    }
+
+    /** @test */
+    public function employee_breaks_are_excluded_from_worked_hours(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee',
+            'email' => 'employee@example.com',
+            'password' => bcrypt('password'),
+        ]);
+
+        $date = Carbon::parse('2026-06-04');
+        $punchIn = Carbon::parse('2026-06-04 09:00:00');
+        $punchOut = Carbon::parse('2026-06-04 17:00:00');
+
+        $attendance = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => $date,
+            'punch_in' => $punchIn,
+            'punch_out' => $punchOut,
+            'status' => 'Present',
+        ]);
+
+        // Create a 1-hour break from 12:00:00 to 13:00:00
+        $attendance->breaks()->create([
+            'start_time' => Carbon::parse('2026-06-04 12:00:00'),
+            'end_time' => Carbon::parse('2026-06-04 13:00:00'),
+            'reason' => 'Lunch',
+        ]);
+
+        // Total shift = 8 hours. Break = 1 hour. Worked hours = 7.0 hours.
+        $this->assertEquals(7.0, $attendance->hours_worked);
+        $this->assertEquals('7h 0m', $attendance->formatted_hours_worked);
+    }
+
+    /** @test */
+    public function employee_punch_out_automatically_ends_active_break(): void
+    {
+        $employee = User::create([
+            'name' => 'Test Employee',
+            'email' => 'employee@example.com',
+            'password' => bcrypt('password'),
+        ]);
+        $employee->assignRole('employee');
+
+        // Setup settings
+        $setting = AttendanceSetting::getSingleton();
+        $setting->update([
+            'latitude' => 23.02250000,
+            'longitude' => 72.57140000,
+            'radius' => 100,
+            'min_punch_out_delay' => 0, // set to 0 for instant punch out in test
+        ]);
+
+        $this->actingAs($employee);
+
+        // Create an attendance record punched in
+        $attendance = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => today(),
+            'punch_in' => now()->subMinutes(10),
+            'punch_in_latitude' => 23.02250000,
+            'punch_in_longitude' => 72.57140000,
+            'status' => 'Present',
+        ]);
+
+        // Start break
+        $attendance->breaks()->create([
+            'start_time' => now()->subMinutes(5),
+            'reason' => 'Tea Break',
+            'end_time' => null,
+        ]);
+
+        $this->assertTrue($attendance->is_on_break);
+
+        // Punch out
+        Livewire::test(MyAttendance::class)
+            ->set('latitude', 23.02250000)
+            ->set('longitude', 72.57140000)
+            ->call('punchOut');
+
+        $this->assertFalse($attendance->fresh()->is_on_break);
+        $this->assertNotNull($attendance->fresh()->punch_out);
+    }
 }

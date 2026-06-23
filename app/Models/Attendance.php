@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Attendance extends Model
 {
@@ -42,6 +43,60 @@ class Attendance extends Model
     }
 
     /**
+     * Get the breaks taken during this attendance.
+     */
+    public function breaks(): HasMany
+    {
+        return $this->hasMany(AttendanceBreak::class);
+    }
+
+    /**
+     * Check if the employee is currently on break.
+     */
+    public function getIsOnBreakAttribute(): bool
+    {
+        return $this->breaks()->whereNull('end_time')->exists();
+    }
+
+    /**
+     * Get the current active break, if any.
+     */
+    public function getCurrentBreakAttribute(): ?AttendanceBreak
+    {
+        return $this->breaks()->whereNull('end_time')->first();
+    }
+
+    /**
+     * Get the total duration of breaks in minutes.
+     */
+    public function getTotalBreakMinutesAttribute(): int
+    {
+        $minutes = 0;
+        foreach ($this->breaks as $break) {
+            $end = $break->end_time ?? now();
+            $minutes += $break->start_time->diffInMinutes($end);
+        }
+
+        return $minutes;
+    }
+
+    /**
+     * Get the formatted total break time (e.g. 1h 15m or 45m).
+     */
+    public function getFormattedTotalBreakTimeAttribute(): string
+    {
+        $totalMinutes = $this->total_break_minutes;
+        $hours = floor($totalMinutes / 60);
+        $minutes = $totalMinutes % 60;
+
+        if ($hours > 0) {
+            return "{$hours}h {$minutes}m";
+        }
+
+        return "{$minutes}m";
+    }
+
+    /**
      * Get the number of minutes worked on the particular day of this attendance record.
      */
     public function getMinutesWorkedOnDay(): int
@@ -62,7 +117,22 @@ class Attendance extends Model
             return 0;
         }
 
-        return (int) $start->diffInMinutes($end);
+        $totalMinutes = (int) $start->diffInMinutes($end);
+
+        $breakMinutes = 0;
+        foreach ($this->breaks as $break) {
+            $breakStart = $break->start_time;
+            $breakEnd = $break->end_time ?? now();
+
+            $intersectStart = $breakStart->greaterThan($start) ? $breakStart : $start;
+            $intersectEnd = $breakEnd->lessThan($end) ? $breakEnd : $end;
+
+            if ($intersectStart->lessThan($intersectEnd)) {
+                $breakMinutes += $intersectStart->diffInMinutes($intersectEnd);
+            }
+        }
+
+        return max(0, $totalMinutes - $breakMinutes);
     }
 
     /**
